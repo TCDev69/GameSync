@@ -9,6 +9,7 @@ using GameSync.Core.Abstractions.Sync;
 using GameSync.Core.Models;
 using GameSync.Core.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Controls;
 
 namespace GameSync.App.ViewModels;
@@ -20,7 +21,10 @@ public sealed partial class LibraryViewModel : ObservableObject
     private readonly ISyncWorkflow _syncWorkflow;
     private readonly INavigationService _navigation;
     private readonly AppActivationService _activation;
+    private readonly AppActivityService _activity;
     private readonly ILogger<LibraryViewModel> _logger;
+    private int _refreshGeneration;
+    private readonly SemaphoreSlim _refreshLock = new(1, 1);
 
     public LibraryViewModel(
         IMachineConfigurationStore machineStore,
@@ -28,6 +32,7 @@ public sealed partial class LibraryViewModel : ObservableObject
         ISyncWorkflow syncWorkflow,
         INavigationService navigation,
         AppActivationService activation,
+        AppActivityService activity,
         ILogger<LibraryViewModel> logger)
     {
         _machineStore = machineStore;
@@ -35,16 +40,21 @@ public sealed partial class LibraryViewModel : ObservableObject
         _syncWorkflow = syncWorkflow;
         _navigation = navigation;
         _activation = activation;
+        _activity = activity;
         _logger = logger;
     }
 
     public ObservableCollection<GameCardItem> Games { get; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyMessage))]
     public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowEmptyMessage))]
     public partial bool IsEmpty { get; set; } = true;
+
+    public bool ShowEmptyMessage => IsEmpty && !IsLoading;
 
     [ObservableProperty]
     public partial bool IsInfoBarOpen { get; set; }
@@ -61,11 +71,26 @@ public sealed partial class LibraryViewModel : ObservableObject
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        if (!await _refreshLock.WaitAsync(0).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        var dispatcher = DispatcherQueue.GetForCurrentThread()
+                         ?? App.MainWindow?.DispatcherQueue;
+        var generation = Interlocked.Increment(ref _refreshGeneration);
+        MachineConfiguration? machine = null;
         IsLoading = true;
+        using var activity = _activity.Begin(
+            AppActivityKind.Library,
+            "Library",
+            "Loading your games…",
+            15,
+            isIndeterminate: true);
         try
         {
             Games.Clear();
-            var machine = await _machineStore.LoadAsync().ConfigureAwait(true);
+            machine = await _machineStore.LoadAsync().ConfigureAwait(true);
             var repoPath = machine.Repository?.LocalPath;
             if (string.IsNullOrWhiteSpace(repoPath) || !Directory.Exists(repoPath))
             {
@@ -79,43 +104,114 @@ public sealed partial class LibraryViewModel : ObservableObject
             {
                 var hasLaunch = machine.Games.TryGetValue(game.Id, out var launch)
                              && LaunchTarget.IsConfigured(launch.Executable);
-                SyncStatus syncStatus;
-                try
-                {
-                    syncStatus = await _syncWorkflow.GetStatusAsync(game.Id).ConfigureAwait(true);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Status failed for {GameId}", game.Id);
-                    syncStatus = SyncStatus.Failed;
-                }
-
-                var libraryStatus = GameLibraryStatusMapper.FromSyncStatus(syncStatus, hasLaunch);
-                var warning = !hasLaunch;
                 Games.Add(new GameCardItem(
                     game.Id,
                     game.Title,
                     game.CoverUrl,
-                    libraryStatus,
+                    GameLibraryStatus.Unknown,
                     lastSyncedText: null,
-                    hasWarning: warning,
-                    warningText: warning ? "Executable not configured on this PC" : null,
+                    hasWarning: !hasLaunch,
+                    warningText: !hasLaunch ? "Executable not configured on this PC" : null,
                     launchAsync: LaunchGameAsync,
                     openDetailsAsync: OpenDetailsAsync));
             }
 
             IsEmpty = Games.Count == 0;
             IsInfoBarOpen = false;
+            activity.Report("Loaded games", 45, isIndeterminate: false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to refresh library");
             ShowInfo("Could not load library", Explain(ex), InfoBarSeverity.Error);
             IsEmpty = Games.Count == 0;
+            return;
         }
         finally
         {
+            // Show cards immediately; sync badges are resolved in the background.
             IsLoading = false;
+            _refreshLock.Release();
+        }
+
+        if (Games.Count > 0 && dispatcher is not null && machine is not null)
+        {
+            activity.Report("Checking sync status…", 55, isIndeterminate: true);
+            await LoadStatusesAsync(generation, machine, dispatcher, activity).ConfigureAwait(true);
+        }
+    }
+
+    private async Task LoadStatusesAsync(
+        int generation,
+        MachineConfiguration machine,
+        DispatcherQueue dispatcher,
+        AppActivityService.ActivityHandle activity)
+    {
+        IReadOnlyDictionary<string, SyncStatus> statuses;
+        try
+        {
+            statuses = await _syncWorkflow.GetGameStatusesAsync().ConfigureAwait(false);
+            if (generation != _refreshGeneration)
+            {
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Background library status refresh failed");
+            return;
+        }
+
+        if (generation != _refreshGeneration)
+        {
+            return;
+        }
+
+        await RunOnDispatcherAsync(dispatcher, () =>
+        {
+            if (generation != _refreshGeneration)
+            {
+                return;
+            }
+
+            ApplyStatuses(statuses, machine);
+            activity.Report("Library ready", 100, isIndeterminate: false);
+            _logger.LogInformation("Library sync badges updated for {Count} game(s)", Games.Count);
+        }).ConfigureAwait(true);
+    }
+
+    private static Task RunOnDispatcherAsync(DispatcherQueue dispatcher, Action action)
+    {
+        var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!dispatcher.TryEnqueue(() =>
+            {
+                try
+                {
+                    action();
+                    tcs.SetResult();
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
+                }
+            }))
+        {
+            tcs.SetException(new InvalidOperationException("Could not schedule a UI update for library statuses."));
+        }
+
+        return tcs.Task;
+    }
+
+    private void ApplyStatuses(IReadOnlyDictionary<string, SyncStatus> statuses, MachineConfiguration machine)
+    {
+        foreach (var item in Games)
+        {
+            var hasLaunch = machine.Games.TryGetValue(item.Id, out var launch)
+                         && LaunchTarget.IsConfigured(launch.Executable);
+            var syncStatus = statuses.TryGetValue(item.Id, out var status)
+                ? status
+                : SyncStatus.Unknown;
+            item.Status = GameLibraryStatusMapper.FromSyncStatus(syncStatus, hasLaunch);
         }
     }
 

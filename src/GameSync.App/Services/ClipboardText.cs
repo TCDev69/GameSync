@@ -63,6 +63,44 @@ internal static class ClipboardText
         }
     }
 
+    public static bool TryGetText(out string? text)
+    {
+        text = null;
+        if (!OpenClipboard(IntPtr.Zero))
+        {
+            return false;
+        }
+
+        try
+        {
+            var handle = GetClipboardData(CfUnicodeText);
+            if (handle == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var pointer = GlobalLock(handle);
+            if (pointer == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            try
+            {
+                text = Marshal.PtrToStringUni(pointer);
+                return !string.IsNullOrWhiteSpace(text);
+            }
+            finally
+            {
+                GlobalUnlock(handle);
+            }
+        }
+        finally
+        {
+            CloseClipboard();
+        }
+    }
+
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool OpenClipboard(IntPtr hWndNewOwner);
@@ -74,6 +112,9 @@ internal static class ClipboardText
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EmptyClipboard();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetClipboardData(uint uFormat);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SetClipboardData(uint uFormat, IntPtr hMem);

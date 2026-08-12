@@ -6,12 +6,16 @@ using GameSync.Core.Abstractions.Configuration;
 using GameSync.Core.Abstractions.Sync;
 using GameSync.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Navigation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.System;
+using Windows.UI.Core;
 
 namespace GameSync.App.Views;
 
@@ -82,36 +86,94 @@ public sealed partial class GameDetailsPage : Page
         }
     }
 
+    private void EditableTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (sender is not TextBox box)
+        {
+            return;
+        }
+
+        var ctrl = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control)
+            .HasFlag(CoreVirtualKeyStates.Down);
+
+        if (ctrl && e.Key == VirtualKey.V && ClipboardText.TryGetText(out var pasted) && pasted is not null)
+        {
+            box.Text = pasted.Trim();
+            box.SelectionStart = box.Text.Length;
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrl && e.Key == VirtualKey.C)
+        {
+            var copy = !string.IsNullOrEmpty(box.SelectedText) ? box.SelectedText : box.Text;
+            if (!string.IsNullOrEmpty(copy))
+            {
+                ClipboardText.SetText(copy);
+                e.Handled = true;
+            }
+        }
+    }
+
     private async void BrowseExecutable_Click(object sender, RoutedEventArgs e)
     {
-        var picker = new FileOpenPicker();
-        PickerInterop.Attach(picker);
-        picker.FileTypeFilter.Add(".exe");
-        picker.FileTypeFilter.Add(".lnk");
-        var file = await picker.PickSingleFileAsync();
+        var file = await PickExecutableAsync();
         if (file is not null)
         {
             ViewModel.ApplyLaunchPath(file.Path);
         }
     }
 
-    private void ExecutableDropBorder_DragOver(object sender, DragEventArgs e)
+    private async void BrowseMonitor_Click(object sender, RoutedEventArgs e)
+    {
+        var file = await PickExecutableAsync();
+        if (file is not null)
+        {
+            ViewModel.ApplyMonitorPath(file.Path);
+        }
+    }
+
+    private static async Task<StorageFile?> PickExecutableAsync()
+    {
+        var picker = new FileOpenPicker();
+        PickerInterop.Attach(picker);
+        picker.FileTypeFilter.Add(".exe");
+        picker.FileTypeFilter.Add(".lnk");
+        return await picker.PickSingleFileAsync();
+    }
+
+    private void LaunchPath_DragOver(object sender, DragEventArgs e)
     {
         e.AcceptedOperation = DataPackageOperation.Copy;
     }
 
-    private async void ExecutableDropBorder_Drop(object sender, DragEventArgs e)
+    private async void ExecutableTextBox_Drop(object sender, DragEventArgs e)
+    {
+        var path = await TryGetDroppedFilePathAsync(e);
+        if (path is not null)
+        {
+            ViewModel.ApplyLaunchPath(path);
+        }
+    }
+
+    private async void MonitorTextBox_Drop(object sender, DragEventArgs e)
+    {
+        var path = await TryGetDroppedFilePathAsync(e);
+        if (path is not null)
+        {
+            ViewModel.ApplyMonitorPath(path);
+        }
+    }
+
+    private static async Task<string?> TryGetDroppedFilePathAsync(DragEventArgs e)
     {
         if (!e.DataView.Contains(StandardDataFormats.StorageItems))
         {
-            return;
+            return null;
         }
 
         var items = await e.DataView.GetStorageItemsAsync();
-        if (items.Count > 0 && items[0] is StorageFile file)
-        {
-            ViewModel.ApplyLaunchPath(file.Path);
-        }
+        return items.Count > 0 && items[0] is StorageFile file ? file.Path : null;
     }
 
     private async void BrowseSaveFolder_Click(object sender, RoutedEventArgs e)
@@ -140,5 +202,25 @@ public sealed partial class GameDetailsPage : Page
         {
             ViewModel.RemoveSaveLocationCommand.Execute(item);
         }
+    }
+
+    private async void RemoveGame_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = "Remove game?",
+            Content = $"Remove \"{ViewModel.Title}\" from your library on this PC and publish the change to GitHub? Save files already synced stay in the repository.",
+            PrimaryButtonText = "Remove",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = XamlRoot
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        await ViewModel.RemoveGameAsync();
     }
 }

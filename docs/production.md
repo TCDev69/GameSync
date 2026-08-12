@@ -53,7 +53,7 @@ Defaults are baked into [`GameSyncOptions`](../src/GameSync.Core/Options/GameSyn
 | Setting | Default |
 |---------|---------|
 | `GitHubClientId` | `Ov23lifRWe1kBZkxMufT` |
-| `UpdateReleasesOwner` | `TCDev` |
+| `UpdateReleasesOwner` | `TCDev69` |
 | `UpdateReleasesRepo` | `GameSync` |
 
 Optional overrides (development / special builds):

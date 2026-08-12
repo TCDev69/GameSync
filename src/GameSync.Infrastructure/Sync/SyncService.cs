@@ -314,7 +314,48 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
             return SyncStatus.LocalChanges;
         }
 
-        return status.SyncStatus;
+        if (status.SyncStatus is SyncStatus.Conflicted or SyncStatus.Diverged)
+        {
+            return status.SyncStatus;
+        }
+
+        return SyncStatus.UpToDate;
+    }
+
+    public async Task<IReadOnlyDictionary<string, SyncStatus>> GetGameStatusesAsync(CancellationToken cancellationToken = default)
+    {
+        var machine = await _machineStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var repoPath = await ResolveRepositoryPathAsync(machine, cancellationToken).ConfigureAwait(false);
+        if (!await _repositoryService.IsLocalRepositoryReadyAsync(repoPath, cancellationToken).ConfigureAwait(false))
+        {
+            return new Dictionary<string, SyncStatus>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var gitStatus = await _gitService.GetStatusAsync(repoPath, cancellationToken).ConfigureAwait(false);
+        var games = await _gamesStore.LoadAsync(repoPath, cancellationToken).ConfigureAwait(false);
+        var results = new Dictionary<string, SyncStatus>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var game in games.Games)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var changes = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+                var gameStatus = changes.HasChanges
+                    ? SyncStatus.LocalChanges
+                    : gitStatus.SyncStatus is SyncStatus.Conflicted or SyncStatus.Diverged
+                        ? gitStatus.SyncStatus
+                        : SyncStatus.UpToDate;
+                results[game.Id] = gameStatus;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Status failed for {GameId}", game.Id);
+                results[game.Id] = SyncStatus.Failed;
+            }
+        }
+
+        return results;
     }
 
     private async Task<SyncResult> WithGateAsync(Func<Task<SyncResult>> action, CancellationToken cancellationToken)

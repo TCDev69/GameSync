@@ -26,5 +26,17 @@ public static class SyncCommitMessage
         return $"GameSync: Update game library from {machineId.Trim()}";
     }
 
+    public static string ForGameRemoved(string gameTitle, string? machineId = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameTitle);
+        var title = gameTitle.Trim();
+        if (string.IsNullOrWhiteSpace(machineId))
+        {
+            return $"GameSync: Remove {title} from library";
+        }
+
+        return $"GameSync: Remove {title} from library on {machineId.Trim()}";
+    }
+
     public static string ForRepositoryInitialize() => "GameSync: Initialize repository structure";
 }

@@ -12,4 +12,11 @@ public interface ISyncWorkflow
     Task<SyncResult> SyncGameAsync(string gameId, CancellationToken cancellationToken = default);
 
     Task<SyncStatus> GetStatusAsync(string? gameId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves sync status for every configured game with a single Git repository read.
+    /// Intended for library/history views that would otherwise call <see cref="GetStatusAsync"/>
+    /// once per game.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, SyncStatus>> GetGameStatusesAsync(CancellationToken cancellationToken = default);
 }

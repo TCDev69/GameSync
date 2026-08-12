@@ -24,18 +24,57 @@
             </TitleBar.IconSource>
         </TitleBar>
 
-        <InfoBar
-            x:Name="UpdateBar"
-            Grid.Row="1"
-            Margin="12,0,12,8"
-            IsOpen="False"
-            IsClosable="True"
-            Severity="Informational"
-            Title="Update available">
-            <InfoBar.ActionButton>
-                <Button Content="Install update" Click="InstallUpdate_Click" />
-            </InfoBar.ActionButton>
-        </InfoBar>
+        <StackPanel Grid.Row="1" Margin="12,0,12,8" Spacing="8">
+            <InfoBar
+                x:Name="UpdateBar"
+                IsOpen="False"
+                IsClosable="True"
+                Severity="Informational"
+                Title="Update available">
+                <InfoBar.ActionButton>
+                    <Button Content="Install update" Click="InstallUpdate_Click" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+
+            <Border
+                x:Name="ActivityPanel"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="14,10"
+                Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <FontIcon
+                        Glyph="&#xE895;"
+                        FontSize="18"
+                        VerticalAlignment="Top"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                    <StackPanel Grid.Column="1" Spacing="6">
+                        <TextBlock
+                            x:Name="ActivityTitleText"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
+                            Text="{Binding Title}" />
+                        <TextBlock
+                            x:Name="ActivityMessageText"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{Binding Message}"
+                            TextWrapping="WrapWholeWords"
+                            Opacity="0.85" />
+                        <ProgressBar
+                            x:Name="ActivityProgressBar"
+                            Maximum="100"
+                            Value="{Binding Progress}"
+                            IsIndeterminate="{Binding IsIndeterminate}"
+                            ShowError="{Binding IsError}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
 
         <NavigationView
             x:Name="RootNavigation"

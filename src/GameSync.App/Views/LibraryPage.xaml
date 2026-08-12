@@ -54,21 +54,25 @@
             IsClosable="True" />
 
         <Grid Grid.Row="2">
-            <ProgressRing
-                Width="48"
-                Height="48"
-                IsActive="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
-                Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay}"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                AutomationProperties.Name="Loading games" />
+            <StackPanel
+                Spacing="8"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Top"
+                Margin="0,0,0,12"
+                Visibility="{x:Bind ViewModel.IsLoading, Mode=OneWay}">
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Loading library…"
+                    Opacity="0.85" />
+                <ProgressBar IsIndeterminate="True" HorizontalAlignment="Stretch" />
+            </StackPanel>
 
             <TextBlock
                 Text="No games yet. Add a game to start syncing saves."
                 Style="{StaticResource BodyTextBlockStyle}"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
-                Visibility="{x:Bind ViewModel.IsEmpty, Mode=OneWay}" />
+                Visibility="{x:Bind ViewModel.ShowEmptyMessage, Mode=OneWay}" />
 
             <GridView
                 x:Name="GamesGrid"
@@ -138,10 +142,10 @@
                                             <Ellipse
                                                 Width="8"
                                                 Height="8"
-                                                Fill="{x:Bind Status, Converter={StaticResource StatusToBrush}}"
+                                                Fill="{x:Bind Status, Mode=OneWay, Converter={StaticResource StatusToBrush}}"
                                                 VerticalAlignment="Center" />
                                             <TextBlock
-                                                Text="{x:Bind StatusText}"
+                                                Text="{x:Bind Status, Mode=OneWay, Converter={StaticResource StatusToText}}"
                                                 Style="{StaticResource CaptionTextBlockStyle}"
                                                 VerticalAlignment="Center" />
                                         </StackPanel>

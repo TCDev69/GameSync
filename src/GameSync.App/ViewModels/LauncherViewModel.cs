@@ -11,13 +11,20 @@ public sealed partial class LauncherViewModel : ObservableObject
 {
     private readonly IGameLauncher _gameLauncher;
     private readonly UiGameSessionAwaiter _sessionAwaiter;
+    private readonly AppActivityService _activity;
     private readonly ILogger<LauncherViewModel> _logger;
     private CancellationTokenSource? _cts;
+    private AppActivityService.ActivityHandle? _activityHandle;
 
-    public LauncherViewModel(IGameLauncher gameLauncher, UiGameSessionAwaiter sessionAwaiter, ILogger<LauncherViewModel> logger)
+    public LauncherViewModel(
+        IGameLauncher gameLauncher,
+        UiGameSessionAwaiter sessionAwaiter,
+        AppActivityService activity,
+        ILogger<LauncherViewModel> logger)
     {
         _gameLauncher = gameLauncher;
         _sessionAwaiter = sessionAwaiter;
+        _activity = activity;
         _logger = logger;
     }
 
@@ -35,6 +42,12 @@ public sealed partial class LauncherViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool IsBusy { get; set; }
+
+    [ObservableProperty]
+    public partial double ProgressPercent { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsProgressIndeterminate { get; set; }
 
     [ObservableProperty]
     public partial bool IsError { get; set; }
@@ -60,6 +73,11 @@ public sealed partial class LauncherViewModel : ObservableObject
         IsError = false;
         _cts = new CancellationTokenSource();
         var progress = new Progress<LaunchProgress>(OnProgress);
+        _activityHandle = _activity.Begin(
+            AppActivityKind.Launch,
+            GameTitle,
+            LaunchPhaseProgress.Describe(LaunchPhase.Preparing, null),
+            5);
 
         try
         {
@@ -68,6 +86,7 @@ public sealed partial class LauncherViewModel : ObservableObject
             {
                 Phase = LaunchPhase.Completed;
                 StatusMessage = "Completed";
+                ApplyProgress(LaunchPhase.Completed, StatusMessage);
                 CloseRequested?.Invoke(this, EventArgs.Empty);
             }
             else if (!result.WasCancelled)
@@ -75,6 +94,7 @@ public sealed partial class LauncherViewModel : ObservableObject
                 IsError = true;
                 StatusMessage = result.Message ?? "Launch failed.";
                 Phase = LaunchPhase.Error;
+                ApplyProgress(LaunchPhase.Error, StatusMessage);
             }
         }
         catch (Exception ex)
@@ -83,10 +103,13 @@ public sealed partial class LauncherViewModel : ObservableObject
             IsError = true;
             Phase = LaunchPhase.Error;
             StatusMessage = ex.Message;
+            ApplyProgress(LaunchPhase.Error, StatusMessage);
         }
         finally
         {
             IsBusy = false;
+            _activityHandle?.Dispose();
+            _activityHandle = null;
             _cts.Dispose();
             _cts = null;
         }
@@ -106,10 +129,24 @@ public sealed partial class LauncherViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(progress.GameTitle))
         {
             GameTitle = progress.GameTitle;
+            _activityHandle?.SetTitle(progress.GameTitle);
         }
 
         ProcessIdText = progress.ProcessId is int pid ? $"PID {pid}" : null;
         IsError = progress.Phase == LaunchPhase.Error;
         AwaitingSessionEnd = progress.Phase == LaunchPhase.AwaitingSessionEnd;
+        ApplyProgress(progress.Phase, progress.Message);
+    }
+
+    private void ApplyProgress(LaunchPhase phase, string? message)
+    {
+        var (percent, indeterminate) = LaunchPhaseProgress.Map(phase);
+        ProgressPercent = percent;
+        IsProgressIndeterminate = indeterminate;
+        _activityHandle?.Report(
+            LaunchPhaseProgress.Describe(phase, message),
+            percent,
+            indeterminate,
+            phase == LaunchPhase.Error);
     }
 }

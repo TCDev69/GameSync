@@ -29,7 +29,8 @@ and is never touched. A failed or rejected update leaves the installed app untou
 | `GameSync.exe --check-update` | Prints installed/latest version, installer URL, size and SHA-256. Exit code `0` up to date, `10` update available, `1` check failed. |
 | `GameSync.exe --update` | Downloads, verifies and starts the installer from the console. |
 
-The startup check can be disabled with `GAMESYNC_UPDATE_ON_STARTUP=0`; the feed can be repointed with
+The startup check can be disabled in **Settings → Automatic updates → Check on startup**, with
+`GAMESYNC_UPDATE_ON_STARTUP=0`, or by repointing the feed with
 `GAMESYNC_UPDATE_OWNER` / `GAMESYNC_UPDATE_REPO`.
 
 ## Testing

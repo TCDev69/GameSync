@@ -31,11 +31,15 @@
                 Severity="{x:Bind ViewModel.InfoBarSeverity, Mode=OneWay}"
                 IsClosable="True" />
 
-            <ProgressRing IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}" Width="40" Height="40" HorizontalAlignment="Left" />
-
             <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Shared" />
-            <TextBox Header="Title" Text="{x:Bind ViewModel.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBox Header="Cover URL" Text="{x:Bind ViewModel.CoverUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <TextBox
+                Header="Title"
+                Text="{x:Bind ViewModel.Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                KeyDown="EditableTextBox_KeyDown" />
+            <TextBox
+                Header="Cover URL"
+                Text="{x:Bind ViewModel.CoverUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                KeyDown="EditableTextBox_KeyDown" />
             <Border Width="120" Height="180" Background="{ThemeResource CoverPlaceholderBrush}" HorizontalAlignment="Left">
                 <Image
                     Source="{x:Bind ViewModel.CoverUrl, Mode=OneWay, Converter={StaticResource StringToImageSource}}"
@@ -43,6 +47,10 @@
             </Border>
 
             <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Save locations" />
+            <TextBlock
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Repository paths are assigned automatically when you save."
+                TextWrapping="WrapWholeWords" />
             <ItemsControl ItemsSource="{x:Bind ViewModel.SaveLocations, Mode=OneWay}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:SaveLocationEditItem">
@@ -50,15 +58,21 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="100" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <TextBox Header="Id" Text="{x:Bind Id, Mode=TwoWay}" />
-                            <TextBox Grid.Column="1" Header="Local path" Text="{x:Bind LocalPath, Mode=TwoWay}" />
-                            <TextBox Grid.Column="2" Header="Remote path" Text="{x:Bind RemotePath, Mode=TwoWay}" />
-                            <Button Grid.Column="3" VerticalAlignment="Bottom" Content="Browse" Click="BrowseSaveFolder_Click" Tag="{x:Bind}" />
-                            <Button Grid.Column="4" VerticalAlignment="Bottom" Content="Remove" Click="RemoveSaveLocation_Click" Tag="{x:Bind}" />
+                            <TextBox
+                                Header="Id"
+                                Text="{x:Bind Id, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                KeyDown="EditableTextBox_KeyDown" />
+                            <TextBox
+                                Grid.Column="1"
+                                Header="Local path"
+                                Text="{x:Bind LocalPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                PlaceholderText="%USERPROFILE%/Saved Games/..."
+                                KeyDown="EditableTextBox_KeyDown" />
+                            <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Browse" Click="BrowseSaveFolder_Click" Tag="{x:Bind}" />
+                            <Button Grid.Column="3" VerticalAlignment="Bottom" Content="Remove" Click="RemoveSaveLocation_Click" Tag="{x:Bind}" />
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -66,26 +80,26 @@
             <Button Content="Add save location" Command="{x:Bind ViewModel.AddSaveLocationCommand}" />
 
             <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="This PC only" />
+            <TextBlock
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Drop a .exe or .lnk, browse, or paste a path or steam:// URI."
+                TextWrapping="WrapWholeWords" />
             <Grid ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Border
-                    x:Name="ExecutableDropBorder"
+                <TextBox
+                    x:Name="ExecutableTextBox"
                     Grid.Column="0"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="4"
+                    Header="Executable or Steam URI"
+                    Text="{x:Bind ViewModel.Executable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    PlaceholderText="C:\Games\...\game.exe or steam://run/1091500"
                     AllowDrop="True"
-                    DragOver="ExecutableDropBorder_DragOver"
-                    Drop="ExecutableDropBorder_Drop">
-                    <TextBox
-                        Header="Executable or Steam URI"
-                        Text="{x:Bind ViewModel.Executable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                        BorderThickness="0" />
-                </Border>
+                    DragOver="LaunchPath_DragOver"
+                    Drop="ExecutableTextBox_Drop"
+                    KeyDown="EditableTextBox_KeyDown" />
                 <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Browse" Click="BrowseExecutable_Click" />
                 <Button
                     Grid.Column="2"
@@ -94,9 +108,31 @@
                     Command="{x:Bind ViewModel.UseSteamLaunchCommand}"
                     Visibility="{x:Bind ViewModel.CanUseSteamLaunch, Mode=OneWay}" />
             </Grid>
-            <TextBox Header="Monitor process (.exe)" Text="{x:Bind ViewModel.MonitorExecutable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBox Header="Arguments" Text="{x:Bind ViewModel.Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-            <TextBox Header="Working directory" Text="{x:Bind ViewModel.WorkingDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <Grid ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox
+                    x:Name="MonitorTextBox"
+                    Grid.Column="0"
+                    Header="Monitor process (.exe)"
+                    Text="{x:Bind ViewModel.MonitorExecutable, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    PlaceholderText="Optional: .exe used to detect when the game closes"
+                    AllowDrop="True"
+                    DragOver="LaunchPath_DragOver"
+                    Drop="MonitorTextBox_Drop"
+                    KeyDown="EditableTextBox_KeyDown" />
+                <Button Grid.Column="1" VerticalAlignment="Bottom" Content="Browse" Click="BrowseMonitor_Click" />
+            </Grid>
+            <TextBox
+                Header="Arguments"
+                Text="{x:Bind ViewModel.Arguments, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                KeyDown="EditableTextBox_KeyDown" />
+            <TextBox
+                Header="Working directory"
+                Text="{x:Bind ViewModel.WorkingDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                KeyDown="EditableTextBox_KeyDown" />
 
             <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Shortcuts" />
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -109,6 +145,19 @@
                     IsChecked="{x:Bind ViewModel.HasStartMenuShortcut, Mode=OneWay}"
                     Command="{x:Bind ViewModel.ToggleStartMenuShortcutCommand}" />
             </StackPanel>
+
+            <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Danger zone" />
+            <TextBlock
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="Removes this game from your library on all PCs. Save files already in the repository are kept."
+                TextWrapping="WrapWholeWords" />
+            <Button
+                Content="Remove game"
+                Click="RemoveGame_Click"
+                HorizontalAlignment="Left"
+                Background="{ThemeResource SystemFillColorCriticalBrush}"
+                Foreground="White"
+                BorderBrush="{ThemeResource SystemFillColorCriticalBrush}" />
         </StackPanel>
     </ScrollViewer>
 </Page>

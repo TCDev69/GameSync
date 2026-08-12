@@ -6,6 +6,7 @@ using GameSync.Core.Models;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.Text;
 using DomainConflict = GameSync.Core.Models.Conflict;
 using GitRepositoryModel = GameSync.Core.Models.GitRepository;
 using LibGitRepository = LibGit2Sharp.Repository;
@@ -18,7 +19,6 @@ namespace GameSync.Infrastructure.Git;
 /// </summary>
 public sealed class GitService : IGitService
 {
-    private const long GitLfsThresholdBytes = 50L * 1024L * 1024L;
     private readonly ICredentialStore _credentialStore;
     private readonly ILogger<GitService> _logger;
 
@@ -165,6 +165,10 @@ public sealed class GitService : IGitService
             {
                 syncStatus = SyncStatus.LocalChanges;
             }
+            else
+            {
+                syncStatus = SyncStatus.UpToDate;
+            }
 
             if (repo.Index.Conflicts.Any())
             {
@@ -213,25 +217,13 @@ public sealed class GitService : IGitService
                 }
             }
 
-            var largeSavePaths = candidates
-                .Where(IsSavePath)
-                .Where(path => TryGetFileLength(localPath, path, out var len) && len >= GitLfsThresholdBytes)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            if (largeSavePaths.Length > 0)
-            {
-                StageLargeFilesWithGitLfs(localPath, largeSavePaths);
-            }
-
             var staged = 0;
-            foreach (var path in candidates.Where(path => !largeSavePaths.Contains(path, StringComparer.OrdinalIgnoreCase)))
+            foreach (var path in candidates)
             {
                 Commands.Stage(repo, path);
                 staged++;
             }
 
-            staged += largeSavePaths.Length;
             _logger.LogInformation("Staged {Count} path(s) in {LocalPath}", staged, localPath);
         }, cancellationToken);
 
@@ -259,19 +251,15 @@ public sealed class GitService : IGitService
         {
             using var repo = Open(localPath);
             cancellationToken.ThrowIfCancellationRequested();
-            _logger.LogInformation("Pushing repository {LocalPath}", localPath);
+            var branch = repo.Head.FriendlyName;
+            _logger.LogInformation("Pushing repository {LocalPath} branch {Branch}", localPath, branch);
 
+            var token = _credentialStore.RetrieveSecretAsync(GitHubCredentialKeys.AccessToken).GetAwaiter().GetResult();
             try
             {
-                var remote = repo.Network.Remotes["origin"]
-                    ?? throw new RepositoryUnavailableException("Remote 'origin' is not configured.");
-                var branch = repo.Head;
-                repo.Network.Push(remote, $"refs/heads/{branch.FriendlyName}", new PushOptions
-                {
-                    CredentialsProvider = CreateCredentialsHandler()
-                });
+                PushWithGitExe(localPath, branch, token);
             }
-            catch (LibGit2SharpException ex)
+            catch (Exception ex)
             {
                 throw new GitPushFailedException($"Push failed for '{localPath}'.", ex);
             }
@@ -407,53 +395,41 @@ public sealed class GitService : IGitService
         return list;
     }
 
-    private void StageLargeFilesWithGitLfs(string localPath, IReadOnlyList<string> relativePaths)
+    private static void PushWithGitExe(string localPath, string branch, string? token)
     {
-        _logger.LogInformation(
-            "Detected {Count} large save file(s) (>= {ThresholdMb}MB). Staging with Git LFS.",
-            relativePaths.Count,
-            GitLfsThresholdBytes / (1024 * 1024));
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = localPath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
 
-        try
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add("credential.helper=");
+        if (!string.IsNullOrWhiteSpace(token))
         {
-            RunGit(localPath, "lfs", "version");
-            RunGit(localPath, "lfs", "install", "--local");
-            RunGit(localPath, "lfs", "track", "saves/**");
-            RunGit(localPath, "add", ".gitattributes");
-            foreach (var rel in relativePaths)
-            {
-                RunGit(localPath, "add", "--", rel);
-            }
+            var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes($"x-access-token:{token}"));
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add($"http.extraHeader=Authorization: Basic {basic}");
         }
-        catch (Exception ex)
+
+        startInfo.ArgumentList.Add("push");
+        startInfo.ArgumentList.Add("origin");
+        startInfo.ArgumentList.Add(branch);
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Failed to start git process for push.");
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
         {
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
             throw new InvalidOperationException(
-                "Large save files were detected, but Git LFS could not be used automatically. Install Git for Windows with Git LFS and retry sync.",
-                ex);
-        }
-    }
-
-    private static bool IsSavePath(string relativePath) =>
-        relativePath.Replace('\\', '/').StartsWith("saves/", StringComparison.OrdinalIgnoreCase);
-
-    private static bool TryGetFileLength(string repoPath, string relativePath, out long length)
-    {
-        var fullPath = Path.Combine(repoPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
-        if (!File.Exists(fullPath))
-        {
-            length = 0;
-            return false;
-        }
-
-        try
-        {
-            length = new FileInfo(fullPath).Length;
-            return true;
-        }
-        catch
-        {
-            length = 0;
-            return false;
+                $"git push origin {branch} failed ({process.ExitCode}): {output} {error}".Trim());
         }
     }
 

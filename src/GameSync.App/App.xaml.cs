@@ -27,6 +27,12 @@ public partial class App : Application
         var logger = Services.GetRequiredService<ILogger<App>>();
         logger.LogInformation("Application startup version={Version}", Core.Versioning.AppVersion.Semantic);
 
+        var updateOptions = Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<GameSync.Core.Options.GameSyncOptions>>().Value;
+        logger.LogInformation(
+            "Update feed configured as {Owner}/{Repo}",
+            updateOptions.UpdateReleasesOwner,
+            updateOptions.UpdateReleasesRepo);
+
         var theme = Services.GetRequiredService<IThemeService>();
         await theme.InitializeAsync();
 

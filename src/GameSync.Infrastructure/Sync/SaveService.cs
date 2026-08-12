@@ -151,6 +151,20 @@ public sealed class SaveService : ISaveService, ISaveSyncService
             cancellationToken.ThrowIfCancellationRequested();
             var local = _pathResolver.Resolve(location.LocalPath);
             var remote = _pathResolver.MapRemotePathToRepository(repositoryLocalPath, location.RemotePath);
+            var localExists = location.Type == SaveLocationType.File
+                ? File.Exists(local)
+                : Directory.Exists(local);
+
+            if (!localExists)
+            {
+                _logger.LogDebug(
+                    "Skipping change detection for {GameId}/{SaveId}; local path does not exist: {Path}",
+                    game.Id,
+                    location.Id,
+                    local);
+                continue;
+            }
+
             var prefix = $"{location.Id}/";
 
             var comparison = FileTreeComparer.Compare(local, remote, location.Type);

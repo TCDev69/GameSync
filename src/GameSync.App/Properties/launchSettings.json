@@ -1,10 +1,16 @@
 {
   "profiles": {
-    "GameSync.App (Package)": {
-      "commandName": "MsixPackage"
-    },
     "GameSync.App (Unpackaged)": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "environmentVariables": {
+        "GAMESYNC_UPDATE_OWNER": "TCDev69"
+      }
+    },
+    "GameSync.App (Package)": {
+      "commandName": "MsixPackage",
+      "environmentVariables": {
+        "GAMESYNC_UPDATE_OWNER": "TCDev69"
+      }
     }
   }
 }

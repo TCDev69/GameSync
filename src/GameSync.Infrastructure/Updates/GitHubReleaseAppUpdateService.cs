@@ -61,8 +61,22 @@ public sealed class GitHubReleaseAppUpdateService : IAppUpdateService
         try
         {
             var client = _httpClientFactory.CreateClient("GitHubApi");
-            var path = $"repos/{_options.UpdateReleasesOwner}/{_options.UpdateReleasesRepo}/releases/latest";
-            var release = await client.GetFromJsonAsync<GitHubReleaseDto>(path, cancellationToken).ConfigureAwait(false);
+            var feed = $"{_options.UpdateReleasesOwner}/{_options.UpdateReleasesRepo}";
+            var path = $"repos/{feed}/releases/latest";
+            using var response = await client.GetAsync(path, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogWarning("Update feed {Feed} was not found on GitHub", feed);
+                _lastCheck = AppUpdateCheckResult.None(
+                    current,
+                    $"No GitHub Releases found for '{feed}'. "
+                    + "If you use a fork, set GAMESYNC_UPDATE_OWNER to the correct GitHub username.");
+                return _lastCheck;
+            }
+
+            response.EnsureSuccessStatusCode();
+            var release = await response.Content.ReadFromJsonAsync<GitHubReleaseDto>(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             if (release is null || string.IsNullOrWhiteSpace(release.TagName))
             {
                 _lastCheck = AppUpdateCheckResult.None(current, "No GitHub Releases found.");
@@ -105,8 +119,11 @@ public sealed class GitHubReleaseAppUpdateService : IAppUpdateService
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
         {
-            _logger.LogWarning(ex, "Update check failed");
-            _lastCheck = AppUpdateCheckResult.None(current, "Could not check for updates. Try again later.");
+            var feed = $"{_options.UpdateReleasesOwner}/{_options.UpdateReleasesRepo}";
+            _logger.LogWarning(ex, "Update check failed for {Feed}", feed);
+            _lastCheck = AppUpdateCheckResult.None(
+                current,
+                $"Could not check '{feed}' for updates. Verify your network connection and try again.");
             return _lastCheck;
         }
     }

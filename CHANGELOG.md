@@ -2,6 +2,29 @@
 
 All notable changes to GameSync are documented here. Version numbers follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-08-12
+
+### Added
+
+- Global activity banner with progress for library load, sync, and launch operations
+- Windows taskbar progress during long-running operations
+- Remove game from library (commits the change and pushes to GitHub; existing save files in the repo are kept)
+- Settings toggle to disable the automatic update check on startup
+- Game details: Enter saves editable fields; improved drag-and-drop and paste for launch paths
+- Steam import: fallback save-path suggestions when PCGamingWiki has none, with clearer messaging when a path is guessed
+
+### Changed
+
+- Library refresh loads sync statuses in parallel and shows a dedicated loading state
+- Game details: repository save paths are assigned automatically; simplified save-location editor
+- Launcher window uses a determinate progress bar instead of an indeterminate spinner
+- Settings page uses a consistent full-width layout across all sections
+
+### Fixed
+
+- Legacy update feed owner (`TCDev`) is normalized to `TCDev69` for the official release repo
+- Navigation selection glitches when opening Settings from the CLI
+
 ## [1.0.2] - 2026-08-12
 
 ### Added
@@ -63,5 +86,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 - Local save path policy blocks sensitive system folders
 - HTTPS-only update downloads from GitHub hosts
 
+[1.0.3]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.3
+[1.0.2]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.2
 [1.0.1]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.1
 [1.0.0]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.0

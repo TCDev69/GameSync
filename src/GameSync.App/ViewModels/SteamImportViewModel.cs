@@ -193,7 +193,10 @@ public sealed partial class SteamImportViewModel : ObservableObject
                 }
             }
 
-            StatusText = $"Done: {ImportedCount} imported, {SkippedCount} skipped, {ErrorCount} error(s), {NeedsManualSavePathCount} need save path setup";
+            StatusText = NeedsManualSavePathCount > 0
+                ? $"Done: {ImportedCount} imported, {SkippedCount} skipped, {ErrorCount} error(s). "
+                  + $"{NeedsManualSavePathCount} game(s) use a guessed save path — verify in Game details."
+                : $"Done: {ImportedCount} imported, {SkippedCount} skipped, {ErrorCount} error(s)";
             ShowResults = true;
         }
         finally
@@ -230,7 +233,24 @@ public sealed partial class SteamImportViewModel : ObservableObject
             _logger.LogWarning(ex, "Metadata fetch failed for {AppId}", item.AppId);
         }
 
-        var saves = saveSuggestions.Take(2).Where(s => PathTemplateExists(s.LocalPathTemplate)).Select((s, i) =>
+        if (saveSuggestions.Count == 0)
+        {
+            var gameId = SaveMapping.SuggestGameId(item.Title);
+            saveSuggestions = await _saveLocationProvider
+                .SuggestByGameIdAsync(gameId, item.Title)
+                .ConfigureAwait(true);
+        }
+
+        var candidates = saveSuggestions.Take(2).ToList();
+        var existingOnDisk = candidates.Where(s => PathTemplateExists(s.LocalPathTemplate)).ToList();
+        var selected = existingOnDisk.Count > 0 ? existingOnDisk : candidates.Take(1).ToList();
+
+        if (existingOnDisk.Count == 0 && selected.Count > 0)
+        {
+            NeedsManualSavePathCount++;
+        }
+
+        var saves = selected.Select((s, i) =>
         {
             var id = i == 0 ? "main" : $"slot_{i + 1}";
             var gameId = SaveMapping.SuggestGameId(item.Title);
@@ -243,11 +263,6 @@ public sealed partial class SteamImportViewModel : ObservableObject
                 Type = SaveLocationType.Directory
             };
         }).ToList();
-
-        if (saves.Count == 0)
-        {
-            NeedsManualSavePathCount++;
-        }
 
         var request = new GameRegistrationRequest
         {

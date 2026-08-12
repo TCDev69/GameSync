@@ -8,6 +8,13 @@ public sealed class GameSyncOptions
     public const string SectionName = "GameSync";
 
     /// <summary>
+    /// Official GitHub owner for Releases-based self-updates.
+    /// </summary>
+    public const string DefaultUpdateReleasesOwner = "TCDev69";
+
+    public const string DefaultUpdateReleasesRepo = "GameSync";
+
+    /// <summary>
     /// Credential Manager target name prefix for GitHub tokens.
     /// </summary>
     public string CredentialTargetPrefix { get; set; } = "GameSync/GitHub";
@@ -34,13 +41,25 @@ public sealed class GameSyncOptions
     /// GitHub owner for Releases-based updates.
     /// Override with GAMESYNC_UPDATE_OWNER.
     /// </summary>
-    public string UpdateReleasesOwner { get; set; } = "TCDev69";
+    public string UpdateReleasesOwner { get; set; } = DefaultUpdateReleasesOwner;
 
     /// <summary>
     /// GitHub repository name for Releases-based updates.
     /// Override with GAMESYNC_UPDATE_REPO.
     /// </summary>
-    public string UpdateReleasesRepo { get; set; } = "GameSync";
+    public string UpdateReleasesRepo { get; set; } = DefaultUpdateReleasesRepo;
+
+    /// <summary>
+    /// v1.0.0 builds and stale MSIX debug output used <c>TCDev</c> instead of <c>TCDev69</c>.
+    /// </summary>
+    public void NormalizeUpdateFeed()
+    {
+        if (string.Equals(UpdateReleasesOwner, "TCDev", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(UpdateReleasesRepo, DefaultUpdateReleasesRepo, StringComparison.OrdinalIgnoreCase))
+        {
+            UpdateReleasesOwner = DefaultUpdateReleasesOwner;
+        }
+    }
 
     /// <summary>
     /// Checks GitHub Releases in the background shortly after the window opens.

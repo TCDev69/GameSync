@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GameSync.App.Navigation;
+using GameSync.App.Services;
 using GameSync.App.Views;
 using GameSync.Core.Abstractions;
 using GameSync.Core.Abstractions.Configuration;
@@ -25,6 +26,7 @@ public sealed partial class GameDetailsViewModel : ObservableObject
     private readonly IShortcutTargetResolver _shortcutResolver;
     private readonly ISyncWorkflow _syncWorkflow;
     private readonly INavigationService _navigation;
+    private readonly AppActivityService _activity;
     private readonly ILogger<GameDetailsViewModel> _logger;
     private string _gameId = string.Empty;
 
@@ -37,6 +39,7 @@ public sealed partial class GameDetailsViewModel : ObservableObject
         IShortcutTargetResolver shortcutResolver,
         ISyncWorkflow syncWorkflow,
         INavigationService navigation,
+        AppActivityService activity,
         ILogger<GameDetailsViewModel> logger)
     {
         _machineStore = machineStore;
@@ -47,6 +50,7 @@ public sealed partial class GameDetailsViewModel : ObservableObject
         _shortcutResolver = shortcutResolver;
         _syncWorkflow = syncWorkflow;
         _navigation = navigation;
+        _activity = activity;
         _logger = logger;
     }
 
@@ -215,6 +219,22 @@ public sealed partial class GameDetailsViewModel : ObservableObject
         }
     }
 
+    public void ApplyMonitorPath(string rawPath)
+    {
+        if (string.IsNullOrWhiteSpace(rawPath))
+        {
+            return;
+        }
+
+        var trimmed = rawPath.Trim();
+        if (LaunchTarget.IsProtocolUri(trimmed))
+        {
+            return;
+        }
+
+        MonitorExecutable = _shortcutResolver.TryResolveTargetPath(trimmed) ?? trimmed;
+    }
+
     [RelayCommand]
     private void AddSaveLocation()
     {
@@ -259,15 +279,17 @@ public sealed partial class GameDetailsViewModel : ObservableObject
             var existing = config.Games[index];
             var saves = SaveLocations
                 .Where(s => !string.IsNullOrWhiteSpace(s.LocalPath))
-                .Select(s => new SaveLocation
+                .Select(s =>
                 {
-                    Id = string.IsNullOrWhiteSpace(s.Id) ? "main" : s.Id.Trim(),
-                    DisplayName = s.DisplayName,
-                    LocalPath = _pathResolver.ToPortableTemplate(s.LocalPath.Trim()),
-                    RemotePath = string.IsNullOrWhiteSpace(s.RemotePath)
-                        ? SaveMapping.BuildDefaultRemotePath(_gameId, string.IsNullOrWhiteSpace(s.Id) ? "main" : s.Id)
-                        : s.RemotePath.Trim().Replace('\\', '/'),
-                    Type = SaveLocationType.Directory
+                    var id = string.IsNullOrWhiteSpace(s.Id) ? "main" : s.Id.Trim();
+                    return new SaveLocation
+                    {
+                        Id = id,
+                        DisplayName = s.DisplayName,
+                        LocalPath = _pathResolver.ToPortableTemplate(s.LocalPath.Trim()),
+                        RemotePath = SaveMapping.BuildDefaultRemotePath(_gameId, id),
+                        Type = SaveLocationType.Directory
+                    };
                 })
                 .ToList();
 
@@ -337,8 +359,15 @@ public sealed partial class GameDetailsViewModel : ObservableObject
         }
 
         IsBusy = true;
+        using var activity = _activity.Begin(
+            AppActivityKind.Sync,
+            Title,
+            "Syncing saves with cloud…",
+            20,
+            isIndeterminate: true);
         try
         {
+            activity.Report("Checking for changes…", 35, isIndeterminate: true);
             var result = await _syncWorkflow.SyncGameAsync(_gameId).ConfigureAwait(true);
             if (!result.Succeeded && result.Conflicts.Count > 0)
             {
@@ -346,6 +375,11 @@ public sealed partial class GameDetailsViewModel : ObservableObject
                 return;
             }
 
+            activity.Report(
+                result.Succeeded ? "Sync completed" : "Sync failed",
+                result.Succeeded ? 100 : 0,
+                isIndeterminate: false,
+                isError: !result.Succeeded);
             Show(
                 result.Succeeded ? "Sync completed" : "Sync failed",
                 result.Message ?? (result.Succeeded ? "OK" : "Synchronization failed."),
@@ -353,6 +387,7 @@ public sealed partial class GameDetailsViewModel : ObservableObject
         }
         catch (Exception ex)
         {
+            activity.Report("Sync failed", 0, isIndeterminate: false, isError: true);
             Show("Sync failed", ex.Message, InfoBarSeverity.Error);
         }
         finally
@@ -397,6 +432,90 @@ public sealed partial class GameDetailsViewModel : ObservableObject
 
     [RelayCommand]
     private void Back() => _navigation.NavigateTo(typeof(LibraryPage));
+
+    public async Task RemoveGameAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_gameId))
+        {
+            return;
+        }
+
+        IsBusy = true;
+        try
+        {
+            var machine = await _machineStore.LoadAsync().ConfigureAwait(true);
+            var repoPath = machine.Repository?.LocalPath
+                ?? throw new InvalidOperationException("Repository is not connected.");
+            var config = await _gamesStore.LoadAsync(repoPath).ConfigureAwait(true);
+            var index = config.Games.ToList().FindIndex(g => g.Id.Equals(_gameId, StringComparison.OrdinalIgnoreCase));
+            if (index < 0)
+            {
+                throw new InvalidOperationException("Game was not found.");
+            }
+
+            var removedTitle = config.Games[index].Title;
+            config.Games.RemoveAt(index);
+            await _gamesStore.SaveAsync(repoPath, config).ConfigureAwait(true);
+
+            machine.Games.Remove(_gameId);
+            await _machineStore.SaveAsync(machine).ConfigureAwait(true);
+
+            await TryDeleteShortcutAsync(DesktopShortcut()).ConfigureAwait(true);
+            await TryDeleteShortcutAsync(StartMenuShortcut()).ConfigureAwait(true);
+
+            try
+            {
+                await _gitService.AddAsync(repoPath, ["config/games.json"]).ConfigureAwait(true);
+                await _gitService.CommitAsync(
+                        repoPath,
+                        SyncCommitMessage.ForGameRemoved(removedTitle, machine.MachineId))
+                    .ConfigureAwait(true);
+                await _gitService.PushAsync(repoPath).ConfigureAwait(true);
+                Show("Game removed", $"'{removedTitle}' was removed from your library.", InfoBarSeverity.Success);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Game removed locally but push failed");
+                Show(
+                    "Removed locally",
+                    $"'{removedTitle}' was removed on this PC, but publishing to GitHub failed: {ex.Message}",
+                    InfoBarSeverity.Warning);
+            }
+
+            if (App.MainWindow is MainWindow mainWindow)
+            {
+                mainWindow.ShowLibraryHome();
+            }
+            else
+            {
+                _navigation.NavigateTo(typeof(LibraryPage));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to remove game {GameId}", _gameId);
+            Show("Remove failed", ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task TryDeleteShortcutAsync(ShortcutConfiguration config)
+    {
+        try
+        {
+            if (await _shortcutService.ExistsAsync(config).ConfigureAwait(true))
+            {
+                await _shortcutService.DeleteAsync(config).ConfigureAwait(true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not delete shortcut for {GameId}", config.GameId);
+        }
+    }
 
     private ShortcutConfiguration DesktopShortcut() => new()
     {

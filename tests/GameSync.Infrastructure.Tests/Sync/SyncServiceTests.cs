@@ -234,6 +234,83 @@ public sealed class SyncServiceTests
         await git.DidNotReceive().PushAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task GetGameStatusesAsync_ReadsGitOnceForAllGames()
+    {
+        var machine = new MachineConfiguration
+        {
+            MachineId = "DESKTOP",
+            Repository = new RepositoryConfiguration
+            {
+                Owner = "me",
+                Name = "saves",
+                LocalPath = @"C:\tmp\repo"
+            }
+        };
+        var games = new GamesConfiguration
+        {
+            Games =
+            [
+                CreateGame(@"C:\tmp\local-a"),
+                new Game
+                {
+                    Id = "other_game",
+                    Title = "Other Game",
+                    SaveLocations =
+                    [
+                        new SaveLocation
+                        {
+                            Id = "main",
+                            Type = SaveLocationType.Directory,
+                            LocalPath = @"C:\tmp\local-b",
+                            RemotePath = "saves/other_game/main"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        var machineStore = Substitute.For<IMachineConfigurationStore>();
+        machineStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(machine);
+        var gamesStore = Substitute.For<ISharedGamesConfigurationStore>();
+        gamesStore.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(games);
+        var repoService = Substitute.For<IRepositoryService>();
+        repoService.IsLocalRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+
+        var git = Substitute.For<IGitService>();
+        git.GetStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new GitRepository
+        {
+            LocalPath = @"C:\tmp\repo",
+            HasUncommittedChanges = false,
+            SyncStatus = SyncStatus.UpToDate
+        });
+
+        var save = Substitute.For<ISaveService>();
+        save.DetectChangesAsync(games.Games[0], Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(SaveChangesDetected.Empty);
+        save.DetectChangesAsync(games.Games[1], Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new SaveChangesDetected { ChangedFiles = ["slot1.sav"] });
+
+        var sync = new SyncService(
+            machineStore,
+            gamesStore,
+            new ConfigurationValidator(),
+            repoService,
+            git,
+            save,
+            Substitute.For<IBackupService>(),
+            Substitute.For<IPathResolver>(),
+            NullLogger<SyncService>.Instance);
+
+        var statuses = await sync.GetGameStatusesAsync();
+
+        statuses.Should().HaveCount(2);
+        statuses["demo_game"].Should().Be(SyncStatus.UpToDate);
+        statuses["other_game"].Should().Be(SyncStatus.LocalChanges);
+        await git.Received(1).GetStatusAsync(@"C:\tmp\repo", Arg.Any<CancellationToken>());
+        await gamesStore.Received(1).LoadAsync(@"C:\tmp\repo", Arg.Any<CancellationToken>());
+    }
+
     private static Game CreateGame(string localPath) => new()
     {
         Id = "demo_game",

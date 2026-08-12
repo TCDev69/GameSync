@@ -29,11 +29,13 @@
             <TextBlock
                 Style="{StaticResource CaptionTextBlockStyle}"
                 Text="{x:Bind ViewModel.ProcessIdText, Mode=OneWay}" />
-            <ProgressRing
-                Width="40"
-                Height="40"
-                IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
-                HorizontalAlignment="Left"
+            <ProgressBar
+                Maximum="100"
+                Value="{x:Bind ViewModel.ProgressPercent, Mode=OneWay}"
+                IsIndeterminate="{x:Bind ViewModel.IsProgressIndeterminate, Mode=OneWay}"
+                ShowError="{x:Bind ViewModel.IsError, Mode=OneWay}"
+                Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}"
+                HorizontalAlignment="Stretch"
                 AutomationProperties.Name="Launch progress" />
             <InfoBar
                 IsOpen="{x:Bind ViewModel.IsError, Mode=OneWay}"

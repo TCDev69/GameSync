@@ -49,6 +49,7 @@ public static class InfrastructureServiceCollectionExtensions
                     "GAMESYNC_UPDATE_ON_STARTUP",
                     v => options.CheckForUpdatesOnStartup = !v.Equals("0", StringComparison.Ordinal)
                                                             && !v.Equals("false", StringComparison.OrdinalIgnoreCase));
+                options.NormalizeUpdateFeed();
             });
 
         services.AddHttpClient("GitHubOAuth", (sp, client) =>

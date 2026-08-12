@@ -22,6 +22,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     private readonly IThemeService _themeService;
     private readonly IAppUpdateService _updateService;
     private readonly ILogger<SettingsViewModel> _logger;
+    private bool _suppressUpdatePreferenceSave;
 
     public SettingsViewModel(
         IMachineConfigurationStore machineStore,
@@ -100,6 +101,9 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     public partial bool IsSignedIn { get; set; }
 
+    [ObservableProperty]
+    public partial bool CheckForUpdatesOnStartup { get; set; } = true;
+
     [RelayCommand]
     private async Task LoadAsync()
     {
@@ -110,6 +114,11 @@ public sealed partial class SettingsViewModel : ObservableObject
             LogsPath = _paths.LogsDirectory;
             SelectedTheme = _themeService.CurrentTheme;
             AboutText = ResolveAboutText();
+
+            var ui = await _uiSettingsStore.LoadAsync().ConfigureAwait(true);
+            _suppressUpdatePreferenceSave = true;
+            CheckForUpdatesOnStartup = ui.CheckForUpdatesOnStartup;
+            _suppressUpdatePreferenceSave = false;
 
             var machine = await _machineStore.LoadAsync().ConfigureAwait(true);
             MachineId = machine.MachineId;
@@ -342,6 +351,30 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     private static string ResolveAboutText() => $"GameSync {AppVersion.Semantic}";
+
+    partial void OnCheckForUpdatesOnStartupChanged(bool value)
+    {
+        if (_suppressUpdatePreferenceSave)
+        {
+            return;
+        }
+
+        _ = SaveUpdatePreferencesAsync();
+    }
+
+    private async Task SaveUpdatePreferencesAsync()
+    {
+        try
+        {
+            var ui = await _uiSettingsStore.LoadAsync().ConfigureAwait(true);
+            ui.CheckForUpdatesOnStartup = CheckForUpdatesOnStartup;
+            await _uiSettingsStore.SaveAsync(ui).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not save update preferences");
+        }
+    }
 
     private void Show(string title, string message, InfoBarSeverity severity)
     {

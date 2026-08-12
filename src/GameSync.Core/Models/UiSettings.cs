@@ -13,4 +13,9 @@ public sealed class UiSettings
     public string Theme { get; set; } = "System";
 
     public bool OnboardingCompleted { get; set; }
+
+    /// <summary>
+    /// When true, GameSync checks GitHub Releases in the background shortly after startup.
+    /// </summary>
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
 }

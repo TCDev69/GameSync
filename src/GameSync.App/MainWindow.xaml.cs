@@ -1,4 +1,5 @@
 using GameSync.App.Navigation;
+using GameSync.App.Services;
 using GameSync.App.ViewModels;
 using GameSync.App.Views;
 using GameSync.Core.Abstractions.Configuration;
@@ -17,16 +18,24 @@ namespace GameSync.App;
 public sealed partial class MainWindow : Window
 {
     private readonly INavigationService _navigationService;
+    private readonly TaskbarProgressService _taskbarProgress;
     private readonly AppCommand _launchCommand;
     private bool _onboardingActive;
     private bool _suppressSelectionNavigation;
 
+    public AppActivityService Activity { get; }
+
     public MainWindow(AppCommand launchCommand)
     {
         _launchCommand = launchCommand;
+        Activity = App.Services.GetRequiredService<AppActivityService>();
+        _taskbarProgress = App.Services.GetRequiredService<TaskbarProgressService>();
         InitializeComponent();
+        ActivityPanel.DataContext = Activity;
 
         App.MainWindow = this;
+        _taskbarProgress.Register(this);
+        Closed += (_, _) => _taskbarProgress.Unregister(this);
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
@@ -73,6 +82,12 @@ public sealed partial class MainWindow : Window
         {
             var options = App.Services.GetRequiredService<IOptions<GameSyncOptions>>().Value;
             if (!options.CheckForUpdatesOnStartup)
+            {
+                return;
+            }
+
+            var ui = await App.Services.GetRequiredService<IUiSettingsStore>().LoadAsync().ConfigureAwait(true);
+            if (!ui.CheckForUpdatesOnStartup)
             {
                 return;
             }
@@ -154,7 +169,9 @@ public sealed partial class MainWindow : Window
         switch (_launchCommand.Kind)
         {
             case AppCommandKind.Settings:
+                _suppressSelectionNavigation = true;
                 RootNavigation.SelectedItem = RootNavigation.SettingsItem;
+                _suppressSelectionNavigation = false;
                 _navigationService.NavigateTo(typeof(SettingsPage));
                 break;
             case AppCommandKind.Status:
@@ -164,10 +181,25 @@ public sealed partial class MainWindow : Window
                 _navigationService.NavigateTo(typeof(HistoryPage));
                 break;
             default:
+                _suppressSelectionNavigation = true;
                 RootNavigation.SelectedItem = RootNavigation.MenuItems[0];
+                _suppressSelectionNavigation = false;
                 _navigationService.NavigateTo(typeof(LibraryPage));
                 break;
         }
+    }
+
+    public void ShowLibraryHome()
+    {
+        if (_onboardingActive)
+        {
+            return;
+        }
+
+        _suppressSelectionNavigation = true;
+        RootNavigation.SelectedItem = RootNavigation.MenuItems[0];
+        _suppressSelectionNavigation = false;
+        _navigationService.NavigateTo(typeof(LibraryPage));
     }
 
     private void SelectNavTag(string tag)
