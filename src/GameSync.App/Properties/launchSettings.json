@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "GameSync.App (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "GameSync.App (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+using GameSync.App.ViewModels;
+using GameSync.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml.Controls;
+
+namespace GameSync.App.Dialogs;
+
+public sealed partial class ConflictDialog : ContentDialog
+{
+    public ConflictDialogViewModel ViewModel { get; }
+
+    public ConflictDialog()
+    {
+        ViewModel = App.Services.GetRequiredService<ConflictDialogViewModel>();
+        InitializeComponent();
+        ViewModel.CloseRequested += (_, _) => Hide();
+    }
+
+    public void Load(Conflict conflict, string? gameTitle = null) =>
+        ViewModel.LoadFromConflict(conflict, gameTitle);
+
+    public ConflictResolutionChoice Choice => ViewModel.Result;
+}

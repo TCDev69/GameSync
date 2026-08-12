@@ -1,0 +1,49 @@
+## Binary artifacts
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Visual Studio / VS Code
+.vs/
+.vscode/*
+!.vscode/extensions.json
+
+## NuGet
+*.nupkg
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+
+## Publish / packaging
+AppPackages/
+BundleArtifacts/
+artifacts/
+*_pkginfo.txt
+*.appx
+*.msix
+*.msixbundle
+
+## Secrets / local config
+*.pfx
+*.p12
+.env
+.env.*
+**/secrets.json
+
+## OS
+Thumbs.db
+Desktop.ini
+
+## Test results
+TestResults/
+coverage*
+*.coverage
+*.coveragexml
+
+## Rider
+.idea/
+*.sln.iml

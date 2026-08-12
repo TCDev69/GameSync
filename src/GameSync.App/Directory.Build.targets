@@ -1,0 +1,26 @@
+<Project>
+  <!-- Keep Package.appxmanifest Identity/Publisher in sync with Directory.Build.props on pack/publish. -->
+  <Target Name="SyncGameSyncPackageManifest"
+          BeforeTargets="_GenerateProjectPriFileCore;_GenerateAppxPackageRecipe;GenerateAppxPackageFile"
+          Condition="Exists('$(MSBuildProjectDirectory)\Package.appxmanifest')">
+    <PropertyGroup>
+      <_GameSyncMsixVersion>$(Version).0</_GameSyncMsixVersion>
+    </PropertyGroup>
+    <XmlPoke
+      XmlInputPath="$(MSBuildProjectDirectory)\Package.appxmanifest"
+      Query="/*[local-name()='Package']/*[local-name()='Identity']/@Version"
+      Value="$(_GameSyncMsixVersion)" />
+    <XmlPoke
+      XmlInputPath="$(MSBuildProjectDirectory)\Package.appxmanifest"
+      Query="/*[local-name()='Package']/*[local-name()='Identity']/@Publisher"
+      Value="$(GameSyncPublisher)" />
+    <XmlPoke
+      XmlInputPath="$(MSBuildProjectDirectory)\Package.appxmanifest"
+      Query="/*[local-name()='Package']/*[local-name()='Identity']/@Name"
+      Value="$(GameSyncPackageIdentityName)" />
+    <XmlPoke
+      XmlInputPath="$(MSBuildProjectDirectory)\Package.appxmanifest"
+      Query="/*[local-name()='Package']/*[local-name()='Properties']/*[local-name()='PublisherDisplayName']"
+      Value="$(GameSyncPublisherDisplayName)" />
+  </Target>
+</Project>

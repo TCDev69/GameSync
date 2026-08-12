@@ -1,0 +1,373 @@
+using GameSync.Core.Abstractions;
+using GameSync.Core.Abstractions.Configuration;
+using GameSync.Core.Abstractions.Git;
+using GameSync.Core.Abstractions.Repository;
+using GameSync.Core.Abstractions.Sync;
+using GameSync.Core.Errors;
+using GameSync.Core.Models;
+using GameSync.Core.Services;
+using Microsoft.Extensions.Logging;
+
+namespace GameSync.Infrastructure.Sync;
+
+public sealed class SyncService : ISyncService, ISyncWorkflow
+{
+    private readonly IMachineConfigurationStore _machineStore;
+    private readonly ISharedGamesConfigurationStore _gamesStore;
+    private readonly IConfigurationValidator _validator;
+    private readonly IRepositoryService _repositoryService;
+    private readonly IGitService _gitService;
+    private readonly ISaveService _saveService;
+    private readonly IBackupService _backupService;
+    private readonly IPathResolver _pathResolver;
+    private readonly ILogger<SyncService> _logger;
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    public SyncService(
+        IMachineConfigurationStore machineStore,
+        ISharedGamesConfigurationStore gamesStore,
+        IConfigurationValidator validator,
+        IRepositoryService repositoryService,
+        IGitService gitService,
+        ISaveService saveService,
+        IBackupService backupService,
+        IPathResolver pathResolver,
+        ILogger<SyncService> logger)
+    {
+        _machineStore = machineStore;
+        _gamesStore = gamesStore;
+        _validator = validator;
+        _repositoryService = repositoryService;
+        _gitService = gitService;
+        _saveService = saveService;
+        _backupService = backupService;
+        _pathResolver = pathResolver;
+        _logger = logger;
+    }
+
+    public Task<SyncResult> SyncBeforeGameLaunchAsync(string gameId, CancellationToken cancellationToken = default) =>
+        WithGateAsync(() => SyncBeforeGameLaunchCoreAsync(gameId, cancellationToken), cancellationToken);
+
+    public Task<SyncResult> SyncAfterGameExitAsync(string gameId, CancellationToken cancellationToken = default) =>
+        WithGateAsync(() => SyncAfterGameExitCoreAsync(gameId, cancellationToken), cancellationToken);
+
+    private async Task<SyncResult> SyncBeforeGameLaunchCoreAsync(string gameId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
+        _logger.LogInformation("SyncBeforeGameLaunch starting for {GameId}", gameId);
+
+        try
+        {
+            var (machine, games, game, repoPath) = await LoadContextAsync(gameId, cancellationToken).ConfigureAwait(false);
+
+            if (!await _repositoryService.IsLocalRepositoryReadyAsync(repoPath, cancellationToken).ConfigureAwait(false))
+            {
+                if (machine.Repository is null)
+                {
+                    throw new RepositoryUnavailableException("No repository is configured on this machine.");
+                }
+
+                var ensured = await _repositoryService.EnsureLocalRepositoryAsync(machine.Repository, cancellationToken).ConfigureAwait(false);
+                repoPath = ensured.LocalPath ?? repoPath;
+            }
+
+            var preexistingConflicts = await _gitService.GetConflictsAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            if (preexistingConflicts.Count > 0)
+            {
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Repository already has unresolved Git conflicts. Resolve them before launching.",
+                    gameId,
+                    conflicts: preexistingConflicts);
+            }
+
+            await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
+
+            var status = await _gitService.GetStatusAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            if (status.HasUncommittedChanges)
+            {
+                _logger.LogWarning("Local uncommitted Git changes detected before launch for {GameId}", gameId);
+                var protectPaths = game.SaveLocations
+                    .Select(s => _pathResolver.Resolve(s.LocalPath))
+                    .ToArray();
+                await _backupService.CreateBackupAsync(gameId, protectPaths, cancellationToken).ConfigureAwait(false);
+            }
+
+            try
+            {
+                await _gitService.PullAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (GitConflictDetectedException ex)
+            {
+                _logger.LogError("Git conflicts detected during pre-launch sync for {GameId}", gameId);
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Git conflicts detected. Resolve them before launching.",
+                    gameId,
+                    ex,
+                    ex.Conflicts);
+            }
+
+            var conflicts = await _gitService.GetConflictsAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            if (conflicts.Count > 0)
+            {
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Git conflicts detected. Resolve them before launching.",
+                    gameId,
+                    conflicts: conflicts);
+            }
+
+            // Do not silently overwrite divergent local saves with remote copies.
+            // First-time cases:
+            // - remote empty + local has saves → keep local; upload happens after exit
+            // - remote has saves + local empty → restore remote
+            // - both have content and differ → refuse
+            var divergent = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+            var remoteHasSaves = _saveService.HasRepositorySaveContent(game, repoPath);
+            var localHasSaves = _saveService.HasLocalSaveContent(game);
+
+            if (divergent.HasChanges && remoteHasSaves && localHasSaves)
+            {
+                _logger.LogWarning(
+                    "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
+                    gameId,
+                    divergent.TotalChanges);
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Local saves differ from the repository. Back up or resolve the difference in History / Game details before launching so GameSync does not overwrite your files.",
+                    gameId);
+            }
+
+            if (!remoteHasSaves)
+            {
+                _logger.LogInformation(
+                    "No remote saves for {GameId} yet; launching with local saves (will upload after exit)",
+                    gameId);
+                return SyncResult.Success(
+                    SyncStatus.LocalChanges,
+                    "No remote saves yet. Your local saves will sync after you exit the game.",
+                    gameId);
+            }
+
+            await _saveService.RestoreRepositoryToLocalAsync(game, repoPath, createBackup: true, cancellationToken)
+                .ConfigureAwait(false);
+
+            _logger.LogInformation("SyncBeforeGameLaunch completed for {GameId}", gameId);
+            return SyncResult.Success(SyncStatus.UpToDate, "Remote saves restored before launch.", gameId);
+        }
+        catch (GameSyncException ex)
+        {
+            _logger.LogError(ex, "SyncBeforeGameLaunch failed for {GameId}", gameId);
+            return SyncResult.Failure(SyncStatus.Failed, ex.Message, gameId, ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected SyncBeforeGameLaunch failure for {GameId}", gameId);
+            return SyncResult.Failure(SyncStatus.Failed, "Unexpected sync failure before launch.", gameId, ex);
+        }
+    }
+
+    private async Task<SyncResult> SyncAfterGameExitCoreAsync(string gameId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
+        _logger.LogInformation("SyncAfterGameExit starting for {GameId}", gameId);
+
+        try
+        {
+            var (machine, _, game, repoPath) = await LoadContextAsync(gameId, cancellationToken).ConfigureAwait(false);
+
+            var changes = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+            if (!changes.HasChanges)
+            {
+                _logger.LogInformation("No save changes detected after exit for {GameId}", gameId);
+                return SyncResult.Success(SyncStatus.UpToDate, "No save changes detected.", gameId);
+            }
+
+            var localPaths = game.SaveLocations
+                .Select(l => _pathResolver.Resolve(l.LocalPath))
+                .Where(p => File.Exists(p) || Directory.Exists(p))
+                .ToArray();
+            if (localPaths.Length > 0)
+            {
+                await _backupService.CreateBackupAsync(gameId, localPaths, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Integrate remote commits before rewriting the working tree / pushing.
+            await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            var remoteStatus = await _gitService.GetStatusAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            if (remoteStatus.SyncStatus is SyncStatus.BehindRemote or SyncStatus.Diverged or SyncStatus.Conflicted)
+            {
+                try
+                {
+                    await _gitService.PullAsync(repoPath, cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitConflictDetectedException ex)
+                {
+                    return SyncResult.Failure(
+                        SyncStatus.Conflicted,
+                        "Remote changes conflict with this PC after gameplay. Resolve conflicts before pushing.",
+                        gameId,
+                        ex,
+                        ex.Conflicts);
+                }
+
+                var pullConflicts = await _gitService.GetConflictsAsync(repoPath, cancellationToken).ConfigureAwait(false);
+                if (pullConflicts.Count > 0)
+                {
+                    return SyncResult.Failure(
+                        SyncStatus.Conflicted,
+                        "Remote changes conflict with this PC after gameplay. Resolve conflicts before pushing.",
+                        gameId,
+                        conflicts: pullConflicts);
+                }
+            }
+
+            await _saveService.CopyLocalToRepositoryAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+
+            var stagedPaths = game.SaveLocations
+                .Select(l => l.RemotePath.Replace('\\', '/'))
+                .ToArray();
+            await _gitService.AddAsync(repoPath, stagedPaths, cancellationToken).ConfigureAwait(false);
+
+            var message = SyncCommitMessage.ForGameUpdate(game.Title, machine.MachineId);
+            await _gitService.CommitAsync(repoPath, message, cancellationToken).ConfigureAwait(false);
+            await _gitService.PushAsync(repoPath, cancellationToken).ConfigureAwait(false);
+
+            _logger.LogInformation(
+                "SyncAfterGameExit completed for {GameId} with {ChangeCount} change(s)",
+                gameId,
+                changes.TotalChanges);
+
+            return SyncResult.Success(
+                SyncStatus.UpToDate,
+                $"Pushed {changes.TotalChanges} save change(s).",
+                gameId);
+        }
+        catch (GameSyncException ex)
+        {
+            _logger.LogError(ex, "SyncAfterGameExit failed for {GameId}", gameId);
+            return SyncResult.Failure(SyncStatus.Failed, ex.Message, gameId, ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected SyncAfterGameExit failure for {GameId}", gameId);
+            return SyncResult.Failure(SyncStatus.Failed, "Unexpected sync failure after exit.", gameId, ex);
+        }
+    }
+
+    public async Task<SyncResult> SyncAllAsync(CancellationToken cancellationToken = default)
+    {
+        var machine = await _machineStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var repoPath = await ResolveRepositoryPathAsync(machine, cancellationToken).ConfigureAwait(false);
+        var games = await _gamesStore.LoadAsync(repoPath, cancellationToken).ConfigureAwait(false);
+
+        SyncResult? last = null;
+        foreach (var game in games.Games)
+        {
+            last = await SyncGameAsync(game.Id, cancellationToken).ConfigureAwait(false);
+            if (!last.Succeeded)
+            {
+                return last;
+            }
+        }
+
+        return last ?? SyncResult.Success(SyncStatus.UpToDate, "No games configured.");
+    }
+
+    public async Task<SyncResult> SyncGameAsync(string gameId, CancellationToken cancellationToken = default)
+    {
+        var before = await SyncBeforeGameLaunchAsync(gameId, cancellationToken).ConfigureAwait(false);
+        if (!before.Succeeded)
+        {
+            return before;
+        }
+
+        return await SyncAfterGameExitAsync(gameId, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<SyncStatus> GetStatusAsync(string? gameId = null, CancellationToken cancellationToken = default)
+    {
+        var machine = await _machineStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var repoPath = await ResolveRepositoryPathAsync(machine, cancellationToken).ConfigureAwait(false);
+        if (!await _repositoryService.IsLocalRepositoryReadyAsync(repoPath, cancellationToken).ConfigureAwait(false))
+        {
+            return SyncStatus.Unknown;
+        }
+
+        var status = await _gitService.GetStatusAsync(repoPath, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(gameId))
+        {
+            return status.SyncStatus;
+        }
+
+        var games = await _gamesStore.LoadAsync(repoPath, cancellationToken).ConfigureAwait(false);
+        var game = games.Games.FirstOrDefault(g => g.Id.Equals(gameId, StringComparison.OrdinalIgnoreCase));
+        if (game is null)
+        {
+            return SyncStatus.Unknown;
+        }
+
+        var changes = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+        if (changes.HasChanges)
+        {
+            return SyncStatus.LocalChanges;
+        }
+
+        return status.SyncStatus;
+    }
+
+    private async Task<SyncResult> WithGateAsync(Func<Task<SyncResult>> action, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await action().ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<(MachineConfiguration Machine, GamesConfiguration Games, Game Game, string RepoPath)> LoadContextAsync(
+        string gameId,
+        CancellationToken cancellationToken)
+    {
+        var machine = await _machineStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+        var machineErrors = _validator.Validate(machine);
+        if (machineErrors.Count > 0)
+        {
+            throw new ConfigurationValidationException(machineErrors);
+        }
+
+        var repoPath = await ResolveRepositoryPathAsync(machine, cancellationToken).ConfigureAwait(false);
+        var games = await _gamesStore.LoadAsync(repoPath, cancellationToken).ConfigureAwait(false);
+        var gameErrors = _validator.Validate(games);
+        if (gameErrors.Count > 0)
+        {
+            throw new ConfigurationValidationException(gameErrors);
+        }
+
+        var game = games.Games.FirstOrDefault(g => g.Id.Equals(gameId, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ConfigurationValidationException([$"Game '{gameId}' was not found in games.json."]);
+
+        return (machine, games, game, repoPath);
+    }
+
+    private async Task<string> ResolveRepositoryPathAsync(MachineConfiguration machine, CancellationToken cancellationToken)
+    {
+        if (machine.Repository is null)
+        {
+            throw new RepositoryUnavailableException("No repository is configured on this machine.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(machine.Repository.LocalPath)
+            && await _repositoryService.IsLocalRepositoryReadyAsync(machine.Repository.LocalPath, cancellationToken).ConfigureAwait(false))
+        {
+            return machine.Repository.LocalPath;
+        }
+
+        return _repositoryService.GetLocalRepositoryPath(machine.Repository.Owner, machine.Repository.Name);
+    }
+}
