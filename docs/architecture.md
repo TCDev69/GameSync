@@ -42,7 +42,7 @@ Executable paths differ per PC and therefore live only in `machine.json`.
 
 - **Unpackaged** WinUI 3 app installed via **Inno Setup** (`GameSync-Setup-x64.exe`) to Program Files, x64 first.
 - Shortcuts target the installed `GameSync.exe` via `Environment.ProcessPath`.
-- **Updates:** `IAppUpdateService` → `GitHubReleaseAppUpdateService` checks GitHub Releases for a newer tag and opens the HTTPS Setup.exe download URI. User data outside the install directory is preserved.
+- **Updates:** `IAppUpdateService` → `GitHubReleaseAppUpdateService` checks GitHub Releases for a newer tag, downloads the Setup.exe over HTTPS, verifies it against the SHA-256 digest published with the asset, and runs it unattended via `IUpdateInstallerLauncher`. User data outside the install directory is preserved. See [updates.md](updates.md).
 
 ## Logging & crashes
 
@@ -57,7 +57,7 @@ Executable paths differ per PC and therefore live only in `machine.json`.
 
 ## CLI
 
-`AppCommandParser` in Core parses `--game`, `--sync`, `--status`, `--settings`, `--help`. Dashboard and launcher windows share the same parser and single-instance activation.
+`AppCommandParser` in Core parses `--game`, `--sync`, `--status`, `--settings`, `--check-update`, `--update`, `--help`. Dashboard and launcher windows share the same parser and single-instance activation.
 
 ## Design decisions
 

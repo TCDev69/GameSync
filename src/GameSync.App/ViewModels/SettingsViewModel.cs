@@ -77,6 +77,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     public partial bool IsUpdateAvailable { get; set; }
 
     [ObservableProperty]
+    public partial bool IsUpdating { get; set; }
+
+    [ObservableProperty]
+    public partial double UpdateProgress { get; set; }
+
+    [ObservableProperty]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -184,21 +190,39 @@ public sealed partial class SettingsViewModel : ObservableObject
     private async Task InstallUpdateAsync()
     {
         IsBusy = true;
+        IsUpdating = true;
+        UpdateProgress = 0;
         try
         {
-            await _updateService.UpdateAsync().ConfigureAwait(true);
+            var progress = new Progress<int>(percent =>
+            {
+                UpdateProgress = percent;
+                UpdateStatus = $"Downloading update… {percent}%";
+            });
+
+            var result = await _updateService.UpdateAsync(progress).ConfigureAwait(true);
+            UpdateStatus = result.Message ?? $"Installing GameSync {result.Version}.";
             Show(
-                "Update started",
-                "The update installer should open. GameSync user data under LocalAppData is preserved.",
+                "Update installing",
+                UpdateStatus + " Your library and saves under LocalAppData are preserved.",
                 InfoBarSeverity.Informational);
+
+            if (result.ShouldExitApplication)
+            {
+                // Inno Setup cannot replace files while GameSync is running; it reopens the app afterwards.
+                await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(true);
+                Microsoft.UI.Xaml.Application.Current?.Exit();
+            }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Update install failed");
+            UpdateStatus = "Update failed.";
             Show("Update failed", ex.Message + " Your library and saves were not modified.", InfoBarSeverity.Error);
         }
         finally
         {
+            IsUpdating = false;
             IsBusy = false;
         }
     }

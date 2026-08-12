@@ -45,6 +45,10 @@ public static class InfrastructureServiceCollectionExtensions
                 ApplyEnv("GAMESYNC_GITHUB_CLIENT_ID", v => options.GitHubClientId = v);
                 ApplyEnv("GAMESYNC_UPDATE_OWNER", v => options.UpdateReleasesOwner = v);
                 ApplyEnv("GAMESYNC_UPDATE_REPO", v => options.UpdateReleasesRepo = v);
+                ApplyEnv(
+                    "GAMESYNC_UPDATE_ON_STARTUP",
+                    v => options.CheckForUpdatesOnStartup = !v.Equals("0", StringComparison.Ordinal)
+                                                            && !v.Equals("false", StringComparison.OrdinalIgnoreCase));
             });
 
         services.AddHttpClient("GitHubOAuth", (sp, client) =>
@@ -59,6 +63,12 @@ public static class InfrastructureServiceCollectionExtensions
             client.BaseAddress = new Uri(options.GitHubApiBaseUrl);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("GameSync");
             client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+        });
+        services.AddHttpClient(GitHubReleaseAppUpdateService.DownloadClientName, client =>
+        {
+            // Release assets are ~75 MB and redirect to objects.githubusercontent.com.
+            client.Timeout = TimeSpan.FromMinutes(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("GameSync");
         });
         services.AddHttpClient("SteamStore", client =>
         {
@@ -102,6 +112,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton<IGameLaunchWorkflow>(sp => sp.GetRequiredService<GameLauncher>());
         services.AddSingleton<IShortcutService, WindowsShortcutService>();
         services.AddSingleton<IShortcutTargetResolver, WindowsShortcutTargetResolver>();
+        services.AddSingleton<IUpdateInstallerLauncher, WindowsUpdateInstallerLauncher>();
         services.AddSingleton<IAppUpdateService, GitHubReleaseAppUpdateService>();
 
         services.AddSingleton<ISteamInstalledGamesProvider, WindowsSteamInstalledGamesProvider>();

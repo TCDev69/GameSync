@@ -40,6 +40,9 @@ public sealed class AppCommandParserTests
     [Theory]
     [InlineData("--status", AppCommandKind.Status)]
     [InlineData("--settings", AppCommandKind.Settings)]
+    [InlineData("--check-update", AppCommandKind.CheckUpdate)]
+    [InlineData("--check-updates", AppCommandKind.CheckUpdate)]
+    [InlineData("--update", AppCommandKind.InstallUpdate)]
     [InlineData("--help", AppCommandKind.Help)]
     [InlineData("-?", AppCommandKind.Help)]
     public void Parse_SimpleSwitches(string arg, AppCommandKind expected)

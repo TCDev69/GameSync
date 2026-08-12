@@ -44,6 +44,7 @@ dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64 -- --s
 dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64 -- --status
 dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64 -- --sync
 dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64 -- --game cyberpunk_2077
+dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64 -- --check-update
 ```
 
 ## Configuration (dev)
@@ -52,8 +53,10 @@ dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64 -- --g
 |----------|---------|
 | `GAMESYNC_GITHUB_CLIENT_ID` | Optional override of baked-in OAuth client id |
 | `GAMESYNC_UPDATE_OWNER` / `GAMESYNC_UPDATE_REPO` | Optional override of Releases update feed |
+| `GAMESYNC_UPDATE_ON_STARTUP` | Set to `0` to suppress the background update check on startup |
+| `GAMESYNC_LIVE_UPDATE_TEST` | Set to `1` to run the opt-in live update test ([updates.md](updates.md)) |
 
-Defaults: Client ID + `TCDev` / `GameSync` in `GameSyncOptions`. Local installer: [Inno Setup 6](https://jrsoftware.org/isinfo.php) + `.\installer\build-release.ps1`.
+Defaults: Client ID + `TCDev69` / `GameSync` in `GameSyncOptions`. Local installer: [Inno Setup 6](https://jrsoftware.org/isinfo.php) + `.\installer\build-release.ps1`.
 
 ## Project conventions
 
@@ -77,7 +80,7 @@ Automated CI covers build + unit tests. The following require a real machine / G
 7. Second PC: pull config, different executable, launch  
 8. Desktop + Start Menu shortcuts (`--game <id>` → installed GameSync.exe)  
 9. Conflict resolve + history restore  
-10. App update via GitHub Releases Setup.exe  
+10. App update: startup banner → Settings → **Update** downloads, verifies and installs (see [updates.md](updates.md))  
 11. Uninstall / reinstall — confirm `%LOCALAPPDATA%\GameSync\` survives  
 
 ## Related docs

@@ -2,6 +2,25 @@
 
 All notable changes to GameSync are documented here. Version numbers follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-08-12
+
+### Added
+
+- Working self-update: the release installer is downloaded, verified and installed unattended, and GameSync restarts itself — no manual download step
+- Background update check a few seconds after startup, surfaced as a dismissable banner with an **Install update** action
+- Download progress for the update in Settings
+- `--check-update` and `--update` CLI commands (`--check-update` exits with `10` when a newer release exists)
+- `GAMESYNC_UPDATE_ON_STARTUP=0` disables the startup check
+- [docs/updates.md](docs/updates.md) documents the update flow, its verification steps and how to test it
+
+### Security
+
+- Update downloads are verified against the size and `sha256` digest GitHub publishes with the release asset and must carry an executable header; a payload failing any check is deleted instead of run. The installer is not code-signed, so this replaces signature validation.
+
+### Fixed
+
+- Installing an update no longer just opens a browser download; installers are started through the shell so Windows can present the UAC prompt the installer requires
+
 ## [1.0.1] - 2026-08-12
 
 ### Added

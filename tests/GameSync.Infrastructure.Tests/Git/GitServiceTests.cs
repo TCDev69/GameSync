@@ -113,6 +113,7 @@ public sealed class GitServiceTests
             CacheDirectory = Path.Combine(root, "cache");
             LogsDirectory = Path.Combine(root, "logs");
             BackupsDirectory = Path.Combine(root, "backups");
+            UpdatesDirectory = Path.Combine(root, "updates");
         }
 
         public string Root { get; }
@@ -121,6 +122,7 @@ public sealed class GitServiceTests
         public string CacheDirectory { get; }
         public string LogsDirectory { get; }
         public string BackupsDirectory { get; }
+        public string UpdatesDirectory { get; }
         public void EnsureCreated()
         {
             Directory.CreateDirectory(RepositoriesDirectory);

@@ -22,6 +22,9 @@ Synchronize video game save files across your PCs using **your own private GitHu
 
 User data lives in `%LOCALAPPDATA%\GameSync\` and **survives updates and uninstall**. See [installer/README.md](installer/README.md).
 
+GameSync updates itself: it notices new releases on startup and, once you accept, downloads the
+installer, verifies its SHA-256 and installs it. See [docs/updates.md](docs/updates.md).
+
 ## Requirements
 
 - Windows 10 (build 19041+) or Windows 11 (x64)
@@ -71,6 +74,7 @@ Details: [docs/development.md](docs/development.md).
 | [docs/production.md](docs/production.md) | OAuth app, build, publish |
 | [docs/sync-workflow.md](docs/sync-workflow.md) | Sync / launch lifecycle |
 | [docs/release.md](docs/release.md) | Versioning, release checklist |
+| [docs/updates.md](docs/updates.md) | Self-update flow, verification, testing |
 | [docs/security.md](docs/security.md) | Threat model |
 | [docs/known-limitations.md](docs/known-limitations.md) | Current limitations |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |

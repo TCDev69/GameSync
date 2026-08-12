@@ -3,8 +3,12 @@ using GameSync.App.ViewModels;
 using GameSync.App.Views;
 using GameSync.Core.Abstractions.Configuration;
 using GameSync.Core.Abstractions.GitHub;
+using GameSync.Core.Abstractions.Updates;
 using GameSync.Core.Commands;
+using GameSync.Core.Options;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -15,6 +19,7 @@ public sealed partial class MainWindow : Window
     private readonly INavigationService _navigationService;
     private readonly AppCommand _launchCommand;
     private bool _onboardingActive;
+    private bool _suppressSelectionNavigation;
 
     public MainWindow(AppCommand launchCommand)
     {
@@ -55,6 +60,54 @@ public sealed partial class MainWindow : Window
         }
 
         ShowMainNavigation();
+        await NotifyIfUpdateAvailableAsync().ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Silent background check: an offline machine must never see an error here, and nothing is
+    /// downloaded until the user accepts from the banner or from Settings.
+    /// </summary>
+    private async Task NotifyIfUpdateAvailableAsync()
+    {
+        try
+        {
+            var options = App.Services.GetRequiredService<IOptions<GameSyncOptions>>().Value;
+            if (!options.CheckForUpdatesOnStartup)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(3)).ConfigureAwait(true);
+
+            var updates = App.Services.GetRequiredService<IAppUpdateService>();
+            var result = await updates.CheckForUpdatesAsync().ConfigureAwait(true);
+            if (!result.UpdateAvailable)
+            {
+                return;
+            }
+
+            UpdateBar.Message =
+                $"GameSync {result.LatestVersion} is available (you have {result.CurrentVersion}). "
+                + "Your library and saves are preserved.";
+            UpdateBar.IsOpen = true;
+        }
+        catch (Exception ex)
+        {
+            App.Services.GetRequiredService<ILogger<MainWindow>>()
+                .LogDebug(ex, "Startup update check skipped");
+        }
+    }
+
+    private void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateBar.IsOpen = false;
+
+        // Selecting the item would navigate without the parameter first.
+        _suppressSelectionNavigation = true;
+        RootNavigation.SelectedItem = RootNavigation.SettingsItem;
+        _suppressSelectionNavigation = false;
+
+        _navigationService.NavigateTo(typeof(SettingsPage), SettingsPage.InstallUpdateParameter);
     }
 
     private async Task<bool> NeedsOnboardingAsync()
@@ -131,7 +184,7 @@ public sealed partial class MainWindow : Window
 
     private void RootNavigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
-        if (_onboardingActive)
+        if (_onboardingActive || _suppressSelectionNavigation)
         {
             return;
         }

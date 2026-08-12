@@ -58,6 +58,16 @@ public static class AppCommandParser
             {
                 return new AppCommand { Kind = AppCommandKind.Settings, RawArguments = args };
             }
+
+            if (IsSwitch(token, "check-update") || IsSwitch(token, "check-updates"))
+            {
+                return new AppCommand { Kind = AppCommandKind.CheckUpdate, RawArguments = args };
+            }
+
+            if (IsSwitch(token, "update"))
+            {
+                return new AppCommand { Kind = AppCommandKind.InstallUpdate, RawArguments = args };
+            }
         }
 
         throw new ArgumentException($"Unrecognized command-line arguments: {string.Join(' ', args)}");
@@ -74,6 +84,8 @@ public static class AppCommandParser
           GameSync.exe --sync <game-id>
           GameSync.exe --status
           GameSync.exe --settings
+          GameSync.exe --check-update
+          GameSync.exe --update
           GameSync.exe --help
 
         Options:
@@ -81,6 +93,8 @@ public static class AppCommandParser
           --sync [game-id]   Synchronize all games or a single game
           --status           Show sync status
           --settings         Show machine and repository settings
+          --check-update     Report whether a newer release is published
+          --update           Download, verify and install the newest release
           --help             Show this help
 
         Headless mode:

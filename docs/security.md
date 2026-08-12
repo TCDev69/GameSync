@@ -30,7 +30,7 @@ Cloned repositories may contain arbitrary files. GameSync copies save trees and 
 
 ## Updates
 
-Updates are delivered as Inno Setup installers (`GameSync-Setup-*.exe`) via HTTPS GitHub Release assets. Only GitHub download hosts are accepted. Failed updates do not wipe LocalAppData.
+Updates are delivered as Inno Setup installers (`GameSync-Setup-*.exe`) via HTTPS GitHub Release assets. Only GitHub download hosts are accepted. Because the installer is not code-signed, the download is checked against the size and `sha256` digest GitHub publishes with the asset and must carry an `MZ` executable header; a payload failing any check is deleted instead of executed. Failed updates do not wipe LocalAppData.
 
 ## Residual risks (accepted)
 

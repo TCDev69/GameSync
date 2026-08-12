@@ -2,6 +2,7 @@ using GameSync.Core.Abstractions.Configuration;
 using GameSync.Core.Abstractions.GitHub;
 using GameSync.Core.Abstractions.Launch;
 using GameSync.Core.Abstractions.Sync;
+using GameSync.Core.Abstractions.Updates;
 using GameSync.Core.Commands;
 using GameSync.Core.Models;
 using GameSync.Core.Services;
@@ -13,6 +14,8 @@ namespace GameSync.App.Cli;
 
 public static class CliCommandRunner
 {
+    public const int UpdateAvailableExitCode = 10;
+
     public static bool IsHeadless(AppCommand command) =>
         command.Kind is not AppCommandKind.Dashboard;
 
@@ -26,6 +29,8 @@ public static class CliCommandRunner
             AppCommandKind.SyncAll => await RunSyncAsync(services, gameId: null, cancellationToken).ConfigureAwait(false),
             AppCommandKind.SyncGame => await RunSyncAsync(services, command.GameId, cancellationToken).ConfigureAwait(false),
             AppCommandKind.LaunchGame => await RunLaunchAsync(services, command.GameId!, cancellationToken).ConfigureAwait(false),
+            AppCommandKind.CheckUpdate => await RunCheckUpdateAsync(services, cancellationToken).ConfigureAwait(false),
+            AppCommandKind.InstallUpdate => await RunInstallUpdateAsync(services, cancellationToken).ConfigureAwait(false),
             _ => RunHelp()
         };
     }
@@ -116,6 +121,78 @@ public static class CliCommandRunner
 
         return result.Succeeded ? 0 : 1;
     }
+
+    /// <summary>
+    /// Exit codes: 0 already current, <see cref="UpdateAvailableExitCode"/> update available, 1 check failed.
+    /// </summary>
+    private static async Task<int> RunCheckUpdateAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        var updates = services.GetRequiredService<IAppUpdateService>();
+        var result = await updates.CheckForUpdatesAsync(cancellationToken).ConfigureAwait(false);
+
+        Console.WriteLine($"Installed version: {result.CurrentVersion}");
+        Console.WriteLine($"Latest release:    {result.LatestVersion ?? "(unknown)"}");
+        Console.WriteLine($"Update available:  {(result.UpdateAvailable ? "yes" : "no")}");
+
+        if (result.InstallerUri is { } installer)
+        {
+            Console.WriteLine($"Installer:         {installer}");
+            Console.WriteLine($"Size:              {FormatSize(result.InstallerSizeBytes)}");
+            Console.WriteLine($"SHA-256:           {result.InstallerSha256 ?? "(not published)"}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.Message))
+        {
+            Console.WriteLine(result.Message);
+        }
+
+        if (result.LatestVersion is null)
+        {
+            return 1;
+        }
+
+        return result.UpdateAvailable ? UpdateAvailableExitCode : 0;
+    }
+
+    private static async Task<int> RunInstallUpdateAsync(IServiceProvider services, CancellationToken cancellationToken)
+    {
+        var updates = services.GetRequiredService<IAppUpdateService>();
+        var check = await updates.CheckForUpdatesAsync(cancellationToken).ConfigureAwait(false);
+        if (!check.UpdateAvailable)
+        {
+            Console.WriteLine(check.Message ?? "Already on the latest version.");
+            return 0;
+        }
+
+        var lastReported = -1;
+        var progress = new Progress<int>(percent =>
+        {
+            // One line per 10% keeps redirected output readable.
+            if (percent / 10 == lastReported / 10 && percent != 100)
+            {
+                return;
+            }
+
+            lastReported = percent;
+            Console.WriteLine($"Downloading {check.LatestVersion}… {percent}%");
+        });
+
+        try
+        {
+            var result = await updates.UpdateAsync(progress, cancellationToken).ConfigureAwait(false);
+            Console.WriteLine(result.Message ?? $"Installing {result.Version}.");
+            Console.WriteLine($"Installer: {result.InstallerPath}");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+    }
+
+    private static string FormatSize(long? bytes) =>
+        bytes is > 0 ? $"{bytes.Value / (1024d * 1024d):F1} MB" : "(unknown)";
 
     private static async Task<int> RunLaunchAsync(IServiceProvider services, string gameId, CancellationToken cancellationToken)
     {

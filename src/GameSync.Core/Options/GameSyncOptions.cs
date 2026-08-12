@@ -41,4 +41,10 @@ public sealed class GameSyncOptions
     /// Override with GAMESYNC_UPDATE_REPO.
     /// </summary>
     public string UpdateReleasesRepo { get; set; } = "GameSync";
+
+    /// <summary>
+    /// Checks GitHub Releases in the background shortly after the window opens.
+    /// Nothing is downloaded or installed without an explicit confirmation.
+    /// </summary>
+    public bool CheckForUpdatesOnStartup { get; set; } = true;
 }

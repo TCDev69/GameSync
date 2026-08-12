@@ -14,6 +14,7 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -23,9 +24,22 @@
             </TitleBar.IconSource>
         </TitleBar>
 
+        <InfoBar
+            x:Name="UpdateBar"
+            Grid.Row="1"
+            Margin="12,0,12,8"
+            IsOpen="False"
+            IsClosable="True"
+            Severity="Informational"
+            Title="Update available">
+            <InfoBar.ActionButton>
+                <Button Content="Install update" Click="InstallUpdate_Click" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+
         <NavigationView
             x:Name="RootNavigation"
-            Grid.Row="1"
+            Grid.Row="2"
             IsBackButtonVisible="Collapsed"
             IsSettingsVisible="True"
             PaneDisplayMode="Left"
@@ -51,7 +65,7 @@
 
         <Frame
             x:Name="OnboardingFrame"
-            Grid.Row="1"
+            Grid.Row="2"
             Visibility="Collapsed" />
     </Grid>
 </Window>

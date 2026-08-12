@@ -11,7 +11,9 @@ public enum AppCommandKind
     SyncGame = 3,
     Status = 4,
     Settings = 5,
-    Help = 6
+    Help = 6,
+    CheckUpdate = 7,
+    InstallUpdate = 8
 }
 
 /// <summary>

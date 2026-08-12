@@ -12,7 +12,11 @@ public interface IAppUpdateService
     Task<bool> IsUpdateAvailableAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Starts a safe update install (downloads Setup.exe from GitHub Releases). Does not delete user data.
+    /// Downloads the release installer, verifies its integrity and starts it unattended.
+    /// User data under %LOCALAPPDATA%\GameSync\ lives outside the install directory and is never touched.
     /// </summary>
-    Task UpdateAsync(CancellationToken cancellationToken = default);
+    /// <param name="progress">Reports download completion from 0 to 100.</param>
+    Task<AppUpdateInstallResult> UpdateAsync(
+        IProgress<int>? progress = null,
+        CancellationToken cancellationToken = default);
 }

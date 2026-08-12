@@ -76,11 +76,18 @@
                     <controls:SettingsCard Header="Check for updates">
                         <Button Content="Check" Command="{x:Bind ViewModel.CheckForUpdatesCommand}" />
                     </controls:SettingsCard>
-                    <controls:SettingsCard Header="Install update" Description="Opens the latest Setup.exe from GitHub Releases. User data is preserved.">
-                        <Button
-                            Content="Update"
-                            Command="{x:Bind ViewModel.InstallUpdateCommand}"
-                            IsEnabled="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" />
+                    <controls:SettingsCard Header="Install update" Description="Downloads the release installer, verifies its SHA-256 and installs it. GameSync closes and reopens; your library and saves are preserved.">
+                        <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                            <ProgressBar
+                                Width="140"
+                                Maximum="100"
+                                Value="{x:Bind ViewModel.UpdateProgress, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.IsUpdating, Mode=OneWay}" />
+                            <Button
+                                Content="Update"
+                                Command="{x:Bind ViewModel.InstallUpdateCommand}"
+                                IsEnabled="{x:Bind ViewModel.IsUpdateAvailable, Mode=OneWay}" />
+                        </StackPanel>
                     </controls:SettingsCard>
                 </controls:SettingsExpander.Items>
             </controls:SettingsExpander>

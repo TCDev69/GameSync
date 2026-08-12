@@ -18,6 +18,11 @@ public interface ILocalAppDataPaths
     string BackupsDirectory { get; }
 
     /// <summary>
+    /// Holds installers downloaded by the self-update flow.
+    /// </summary>
+    string UpdatesDirectory { get; }
+
+    /// <summary>
     /// Ensures all required directories exist.
     /// </summary>
     void EnsureCreated();

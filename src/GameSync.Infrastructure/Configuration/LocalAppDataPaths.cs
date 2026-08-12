@@ -18,6 +18,7 @@ public sealed class LocalAppDataPaths : ILocalAppDataPaths
         CacheDirectory = Path.Combine(Root, "cache");
         LogsDirectory = Path.Combine(Root, "logs");
         BackupsDirectory = Path.Combine(Root, "backups");
+        UpdatesDirectory = Path.Combine(Root, "updates");
     }
 
     public string Root { get; }
@@ -32,6 +33,8 @@ public sealed class LocalAppDataPaths : ILocalAppDataPaths
 
     public string BackupsDirectory { get; }
 
+    public string UpdatesDirectory { get; }
+
     public void EnsureCreated()
     {
         Directory.CreateDirectory(Root);
@@ -39,5 +42,6 @@ public sealed class LocalAppDataPaths : ILocalAppDataPaths
         Directory.CreateDirectory(CacheDirectory);
         Directory.CreateDirectory(LogsDirectory);
         Directory.CreateDirectory(BackupsDirectory);
+        Directory.CreateDirectory(UpdatesDirectory);
     }
 }

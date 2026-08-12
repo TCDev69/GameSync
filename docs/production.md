@@ -63,6 +63,7 @@ Optional overrides (development / special builds):
 | `GAMESYNC_GITHUB_CLIENT_ID` | Replace OAuth Client ID |
 | `GAMESYNC_UPDATE_OWNER` | Replace Releases owner |
 | `GAMESYNC_UPDATE_REPO` | Replace Releases repo |
+| `GAMESYNC_UPDATE_ON_STARTUP` | Set to `0` to suppress the background update check on startup |
 
 ```powershell
 dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64

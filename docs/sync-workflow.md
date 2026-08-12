@@ -25,9 +25,11 @@ Pre/post save synchronization is owned by `ISyncService` (`SyncService`). The fu
 | `GameSync.exe --sync <id>` | Synchronize one game (console) |
 | `GameSync.exe --status` | Print repository and per-game status (console) |
 | `GameSync.exe --settings` | Print machine/repository settings (console) |
+| `GameSync.exe --check-update` | Report the newest release and its installer digest (console) |
+| `GameSync.exe --update` | Download, verify and install the newest release (console) |
 | `GameSync.exe --help` | Print help (console) |
 
-Parser: `AppCommandParser` in Core (supports `--`, `-`, `/`). All commands except a bare `GameSync.exe` invocation run headless in the console (exit code `0` on success, non-zero on failure).
+Parser: `AppCommandParser` in Core (supports `--`, `-`, `/`). All commands except a bare `GameSync.exe` invocation run headless in the console (exit code `0` on success, non-zero on failure; `--check-update` returns `10` when an update is available).
 
 ## Launch lifecycle (`--game`)
 
