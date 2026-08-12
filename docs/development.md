@@ -4,6 +4,7 @@
 
 - Windows 10 (19041+) or Windows 11
 - .NET 10 SDK
+- Git for Windows + Git LFS (recommended for very large save files)
 - Windows App SDK runtime (via NuGet for development)
 - Visual Studio 2022+ with WinUI workload **or** `dotnet` CLI
 - For GitHub auth: official builds include a default OAuth client id; set `GAMESYNC_GITHUB_CLIENT_ID` only when shipping your own fork
@@ -23,6 +24,11 @@ dotnet test GameSync.sln -c Release -p:Platform=x64
 ```
 
 Unit tests mock `IProcessLauncher` and GitHub HTTP clients. They never launch real games or require a GitHub account.
+
+### Large save files (Git LFS)
+
+When files under `saves/` are larger than ~50 MB, GameSync tries to stage them with Git LFS automatically (`git lfs track saves/**`).
+If Git LFS is not available, sync fails with a clear error so you can install Git LFS and retry.
 
 ## Run
 

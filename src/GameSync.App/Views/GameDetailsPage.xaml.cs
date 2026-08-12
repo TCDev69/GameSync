@@ -114,6 +114,26 @@ public sealed partial class GameDetailsPage : Page
         }
     }
 
+    private async void BrowseSaveFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: SaveLocationEditItem item })
+        {
+            return;
+        }
+
+        var picker = new FolderPicker();
+        PickerInterop.Attach(picker);
+        picker.FileTypeFilter.Add("*");
+        picker.SuggestedStartLocation = PickerLocationId.ComputerFolder;
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is not null)
+        {
+            var paths = App.Services.GetRequiredService<GameSync.Core.Abstractions.IPathResolver>();
+            item.LocalPath = paths.ToPortableTemplate(folder.Path);
+            item.IsUserEdited = true;
+        }
+    }
+
     private void RemoveSaveLocation_Click(object sender, RoutedEventArgs e)
     {
         if (sender is FrameworkElement { Tag: SaveLocationEditItem item })

@@ -14,7 +14,11 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <TitleBar x:Name="AppTitleBar" Title="GameSync Launcher" />
+        <TitleBar x:Name="AppTitleBar" Title="GameSync Launcher">
+            <TitleBar.IconSource>
+                <ImageIconSource ImageSource="Assets/AppIcon.ico" />
+            </TitleBar.IconSource>
+        </TitleBar>
 
         <StackPanel Grid.Row="1" Padding="24" Spacing="12" MaxWidth="480">
             <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="{x:Bind ViewModel.GameTitle, Mode=OneWay}" />

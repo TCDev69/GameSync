@@ -28,6 +28,36 @@ jobs:
           echo "version=$version" >> $env:GITHUB_OUTPUT
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
+      - name: Build release notes from CHANGELOG
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          $version = $env:VERSION
+          $lines = Get-Content -Path CHANGELOG.md
+          $start = -1
+          for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match "^##\s+\[?$([regex]::Escape($version))\]?(\s|$)") { $start = $i; break }
+          }
+
+          if ($start -lt 0) {
+            throw "CHANGELOG.md has no '## [$version]' section. Add the entry before tagging $env:TAG."
+          }
+
+          $body = New-Object System.Collections.Generic.List[string]
+          for ($i = $start + 1; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match '^##\s') { break }
+            if ($lines[$i] -match '^\[[^\]]+\]:\s') { continue }
+            $body.Add($lines[$i])
+          }
+
+          $notes = ($body -join "`n").Trim()
+          if (-not $notes) { throw "CHANGELOG.md section for $version is empty." }
+
+          Set-Content -Path release-notes.md -Value "## What's changed in $version`n`n$notes" -Encoding utf8
+          Write-Host "Release notes:`n$notes"
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
@@ -44,6 +74,8 @@ jobs:
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
+          name: GameSync ${{ steps.ver.outputs.version }}
           files: |
             artifacts/GameSync-Setup-x64.exe
+          body_path: release-notes.md
           generate_release_notes: true

@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GameSync.App.Navigation;
 using GameSync.App.Views;
+using GameSync.Core.Abstractions;
 using GameSync.Core.Abstractions.Configuration;
 using GameSync.Core.Abstractions.Games;
 using GameSync.Core.Abstractions.Metadata;
@@ -33,6 +34,7 @@ public sealed partial class SteamImportViewModel : ObservableObject
     private readonly IGameRegistrationService _registrationService;
     private readonly ISharedGamesConfigurationStore _gamesStore;
     private readonly IMachineConfigurationStore _machineStore;
+    private readonly IPathResolver _pathResolver;
     private readonly INavigationService _navigation;
     private readonly ILogger<SteamImportViewModel> _logger;
 
@@ -45,6 +47,7 @@ public sealed partial class SteamImportViewModel : ObservableObject
         IGameRegistrationService registrationService,
         ISharedGamesConfigurationStore gamesStore,
         IMachineConfigurationStore machineStore,
+        IPathResolver pathResolver,
         INavigationService navigation,
         ILogger<SteamImportViewModel> logger)
     {
@@ -54,6 +57,7 @@ public sealed partial class SteamImportViewModel : ObservableObject
         _registrationService = registrationService;
         _gamesStore = gamesStore;
         _machineStore = machineStore;
+        _pathResolver = pathResolver;
         _navigation = navigation;
         _logger = logger;
     }
@@ -80,6 +84,9 @@ public sealed partial class SteamImportViewModel : ObservableObject
 
     [ObservableProperty]
     public partial bool ShowResults { get; set; }
+
+    [ObservableProperty]
+    public partial int NeedsManualSavePathCount { get; set; }
 
     /// <summary>
     /// When non-null, the UI should show a duplicate dialog for this game.
@@ -165,6 +172,7 @@ public sealed partial class SteamImportViewModel : ObservableObject
         ImportedCount = 0;
         SkippedCount = 0;
         ErrorCount = 0;
+        NeedsManualSavePathCount = 0;
         ShowResults = false;
 
         try
@@ -185,7 +193,7 @@ public sealed partial class SteamImportViewModel : ObservableObject
                 }
             }
 
-            StatusText = $"Done: {ImportedCount} imported, {SkippedCount} skipped, {ErrorCount} error(s)";
+            StatusText = $"Done: {ImportedCount} imported, {SkippedCount} skipped, {ErrorCount} error(s), {NeedsManualSavePathCount} need save path setup";
             ShowResults = true;
         }
         finally
@@ -222,7 +230,7 @@ public sealed partial class SteamImportViewModel : ObservableObject
             _logger.LogWarning(ex, "Metadata fetch failed for {AppId}", item.AppId);
         }
 
-        var saves = saveSuggestions.Take(2).Select((s, i) =>
+        var saves = saveSuggestions.Take(2).Where(s => PathTemplateExists(s.LocalPathTemplate)).Select((s, i) =>
         {
             var id = i == 0 ? "main" : $"slot_{i + 1}";
             var gameId = SaveMapping.SuggestGameId(item.Title);
@@ -235,6 +243,11 @@ public sealed partial class SteamImportViewModel : ObservableObject
                 Type = SaveLocationType.Directory
             };
         }).ToList();
+
+        if (saves.Count == 0)
+        {
+            NeedsManualSavePathCount++;
+        }
 
         var request = new GameRegistrationRequest
         {
@@ -302,6 +315,24 @@ public sealed partial class SteamImportViewModel : ObservableObject
         {
             _logger.LogWarning("Registration failed for {Title}: {Error}", item.Title, result.ErrorMessage);
             ErrorCount++;
+        }
+    }
+
+    private bool PathTemplateExists(string template)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return false;
+        }
+
+        try
+        {
+            var resolved = _pathResolver.Resolve(template);
+            return Directory.Exists(resolved) || File.Exists(resolved);
+        }
+        catch
+        {
+            return false;
         }
     }
 }

@@ -5,6 +5,7 @@ using GameSync.Core.GitHub;
 using GameSync.Core.Models;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using DomainConflict = GameSync.Core.Models.Conflict;
 using GitRepositoryModel = GameSync.Core.Models.GitRepository;
 using LibGitRepository = LibGit2Sharp.Repository;
@@ -17,6 +18,7 @@ namespace GameSync.Infrastructure.Git;
 /// </summary>
 public sealed class GitService : IGitService
 {
+    private const long GitLfsThresholdBytes = 50L * 1024L * 1024L;
     private readonly ICredentialStore _credentialStore;
     private readonly ILogger<GitService> _logger;
 
@@ -199,7 +201,7 @@ public sealed class GitService : IGitService
             }
 
             var status = repo.RetrieveStatus(new StatusOptions());
-            var staged = 0;
+            var candidates = new List<string>();
             foreach (var entry in status)
             {
                 var filePath = entry.FilePath.Replace('\\', '/');
@@ -207,11 +209,29 @@ public sealed class GitService : IGitService
                         filePath.Equals(prefix, StringComparison.OrdinalIgnoreCase)
                         || filePath.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)))
                 {
-                    Commands.Stage(repo, entry.FilePath);
-                    staged++;
+                    candidates.Add(entry.FilePath);
                 }
             }
 
+            var largeSavePaths = candidates
+                .Where(IsSavePath)
+                .Where(path => TryGetFileLength(localPath, path, out var len) && len >= GitLfsThresholdBytes)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (largeSavePaths.Length > 0)
+            {
+                StageLargeFilesWithGitLfs(localPath, largeSavePaths);
+            }
+
+            var staged = 0;
+            foreach (var path in candidates.Where(path => !largeSavePaths.Contains(path, StringComparer.OrdinalIgnoreCase)))
+            {
+                Commands.Stage(repo, path);
+                staged++;
+            }
+
+            staged += largeSavePaths.Length;
             _logger.LogInformation("Staged {Count} path(s) in {LocalPath}", staged, localPath);
         }, cancellationToken);
 
@@ -385,6 +405,85 @@ public sealed class GitService : IGitService
         }
 
         return list;
+    }
+
+    private void StageLargeFilesWithGitLfs(string localPath, IReadOnlyList<string> relativePaths)
+    {
+        _logger.LogInformation(
+            "Detected {Count} large save file(s) (>= {ThresholdMb}MB). Staging with Git LFS.",
+            relativePaths.Count,
+            GitLfsThresholdBytes / (1024 * 1024));
+
+        try
+        {
+            RunGit(localPath, "lfs", "version");
+            RunGit(localPath, "lfs", "install", "--local");
+            RunGit(localPath, "lfs", "track", "saves/**");
+            RunGit(localPath, "add", ".gitattributes");
+            foreach (var rel in relativePaths)
+            {
+                RunGit(localPath, "add", "--", rel);
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                "Large save files were detected, but Git LFS could not be used automatically. Install Git for Windows with Git LFS and retry sync.",
+                ex);
+        }
+    }
+
+    private static bool IsSavePath(string relativePath) =>
+        relativePath.Replace('\\', '/').StartsWith("saves/", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryGetFileLength(string repoPath, string relativePath, out long length)
+    {
+        var fullPath = Path.Combine(repoPath, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(fullPath))
+        {
+            length = 0;
+            return false;
+        }
+
+        try
+        {
+            length = new FileInfo(fullPath).Length;
+            return true;
+        }
+        catch
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    private static void RunGit(string workingDirectory, params string[] args)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        foreach (var arg in args)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Failed to start git process.");
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+        {
+            var output = process.StandardOutput.ReadToEnd();
+            var error = process.StandardError.ReadToEnd();
+            throw new InvalidOperationException($"git {string.Join(" ", args)} failed ({process.ExitCode}): {output} {error}".Trim());
+        }
     }
 
     private void EnsureUpstreamTracking(LibGitRepository repo)

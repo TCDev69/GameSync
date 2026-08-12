@@ -26,6 +26,13 @@ Code signing is **not** used for this product. See [production.md](production.md
 - `.github/workflows/ci.yml` — restore, Debug build, tests, Release build on push/PR.
 - `.github/workflows/release.yml` — on tag `v*.*.*`, publish unpackaged x64 + compile Inno Setup, attach `GameSync-Setup-x64.exe` to the GitHub Release.
 
+### Release notes
+
+Release notes are generated from `CHANGELOG.md`: the workflow extracts the `## [MAJOR.MINOR.PATCH]`
+section matching the tag and uses it as the release body, then GitHub appends the auto-generated
+commit list. **The job fails if the tag has no matching CHANGELOG section**, so every release
+always ships its own changelog.
+
 Optional client environment for in-app update checks:
 
 - `GAMESYNC_UPDATE_OWNER`
@@ -34,12 +41,13 @@ Optional client environment for in-app update checks:
 ## Release checklist
 
 1. Update `Version` in `Directory.Build.props`.
-2. Run locally: Debug + Release builds and `dotnet test`.
-3. Verify installer build for x64 (see [installer/README.md](../installer/README.md)).
-4. Tag `vX.Y.Z` and push (triggers Release workflow).
-5. Confirm Release asset: `GameSync-Setup-x64.exe`.
-6. Spot-check install → Settings About version → update check.
-7. Confirm `%LOCALAPPDATA%\GameSync\` intact after upgrade.
+2. Add the matching `## [x.y.z]` section to `CHANGELOG.md` (required by the Release workflow).
+3. Run locally: Debug + Release builds and `dotnet test`.
+4. Verify installer build for x64 (see [installer/README.md](../installer/README.md)).
+5. Tag `vX.Y.Z` and push (triggers Release workflow).
+6. Confirm Release asset: `GameSync-Setup-x64.exe` and the changelog body.
+7. Spot-check install → Settings About version → update check.
+8. Confirm `%LOCALAPPDATA%\GameSync\` intact after upgrade.
 
 ## What was verified in this workspace
 

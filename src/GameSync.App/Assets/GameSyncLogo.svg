@@ -1,0 +1,36 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>GameSync</title>
+  <defs>
+    <linearGradient id="plate" x1="24" y1="24" x2="488" y2="488" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1E2436"/>
+      <stop offset="1" stop-color="#0B0F18"/>
+    </linearGradient>
+    <linearGradient id="sync" x1="106" y1="106" x2="406" y2="406" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#63E6FF"/>
+      <stop offset="1" stop-color="#4B79FF"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="url(#plate)"/>
+
+  <!-- Sync ring: two 140deg arcs on r=150 circle centred at (256,256) -->
+  <g stroke="url(#sync)" stroke-width="34" stroke-linecap="round" fill="none">
+    <path d="M115.05 204.70 A150 150 0 0 1 396.95 204.70"/>
+    <path d="M396.95 307.30 A150 150 0 0 1 115.05 307.30"/>
+  </g>
+
+  <!-- Arrow heads, tangent to the arc end points -->
+  <g fill="url(#sync)">
+    <path d="M408.58 236.65 L371.58 213.93 L422.32 195.47 Z"/>
+    <path d="M103.42 275.35 L140.42 298.07 L89.68 316.53 Z"/>
+  </g>
+
+  <!-- Gamepad -->
+  <g>
+    <rect x="176" y="222" width="160" height="84" rx="34" fill="#C6D4FF"/>
+    <rect x="197" y="258.5" width="34" height="11" rx="5.5" fill="#22325A"/>
+    <rect x="208.5" y="247" width="11" height="34" rx="5.5" fill="#22325A"/>
+    <circle cx="298" cy="252" r="9" fill="#22325A"/>
+    <circle cx="318" cy="274" r="9" fill="#22325A"/>
+  </g>
+</svg>

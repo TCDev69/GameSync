@@ -34,7 +34,7 @@ public sealed class GameSyncOptions
     /// GitHub owner for Releases-based updates.
     /// Override with GAMESYNC_UPDATE_OWNER.
     /// </summary>
-    public string UpdateReleasesOwner { get; set; } = "TCDev";
+    public string UpdateReleasesOwner { get; set; } = "TCDev69";
 
     /// <summary>
     /// GitHub repository name for Releases-based updates.
