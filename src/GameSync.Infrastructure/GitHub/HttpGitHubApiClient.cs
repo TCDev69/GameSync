@@ -2,11 +2,13 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using GameSync.Core.Abstractions.GitHub;
 using GameSync.Core.Errors;
 using GameSync.Core.GitHub;
 using GameSync.Core.Models;
 using GameSync.Core.Options;
+using GameSync.Infrastructure.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -32,7 +34,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accessToken);
         using var request = CreateRequest(HttpMethod.Get, "user", accessToken);
-        var payload = await SendAsync<UserResponse>(request, cancellationToken).ConfigureAwait(false);
+        var payload = await SendAsync(request, GameSyncJsonContext.Default.UserResponse, cancellationToken).ConfigureAwait(false);
         if (payload is null || string.IsNullOrWhiteSpace(payload.Login))
         {
             throw new GitHubAuthenticationFailedException("GitHub did not return an authenticated user.");
@@ -56,7 +58,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
         while (true)
         {
             using var request = CreateRequest(HttpMethod.Get, $"user/repos?per_page=100&page={page}&affiliation=owner,collaborator,organization_member&sort=updated", accessToken);
-            var payload = await SendAsync<List<RepoResponse>>(request, cancellationToken).ConfigureAwait(false);
+            var payload = await SendAsync(request, GameSyncJsonContext.Default.ListRepoResponse, cancellationToken).ConfigureAwait(false);
             if (payload is null || payload.Count == 0)
             {
                 break;
@@ -93,7 +95,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
         using var request = CreateRequest(HttpMethod.Get, $"repos/{owner}/{name}", accessToken);
         try
         {
-            var payload = await SendAsync<RepoResponse>(request, cancellationToken).ConfigureAwait(false);
+            var payload = await SendAsync(request, GameSyncJsonContext.Default.RepoResponse, cancellationToken).ConfigureAwait(false);
             if (payload is null || string.IsNullOrWhiteSpace(payload.Name))
             {
                 throw new RepositoryUnavailableException($"Repository '{owner}/{name}' was not found.");
@@ -107,7 +109,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
         }
     }
 
-    private async Task<T?> SendAsync<T>(HttpRequestMessage request, CancellationToken cancellationToken)
+    private async Task<T?> SendAsync<T>(HttpRequestMessage request, JsonTypeInfo<T> typeInfo, CancellationToken cancellationToken)
     {
         var client = _httpClientFactory.CreateClient("GitHubApi");
         client.BaseAddress ??= new Uri(_options.GitHubApiBaseUrl);
@@ -145,7 +147,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        return await JsonSerializer.DeserializeAsync<T>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
+        return await JsonSerializer.DeserializeAsync(stream, typeInfo, cancellationToken).ConfigureAwait(false);
     }
 
     private static HttpRequestMessage CreateRequest(HttpMethod method, string relativeUrl, string accessToken)
@@ -174,12 +176,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
         return config;
     }
 
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-    private sealed class UserResponse
+    internal sealed class UserResponse
     {
         [JsonPropertyName("login")]
         public string? Login { get; set; }
@@ -194,7 +191,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
         public string? AvatarUrl { get; set; }
     }
 
-    private sealed class RepoResponse
+    internal sealed class RepoResponse
     {
         [JsonPropertyName("name")]
         public string? Name { get; set; }
@@ -212,7 +209,7 @@ public sealed class HttpGitHubApiClient : IGitHubApiClient
         public OwnerResponse? Owner { get; set; }
     }
 
-    private sealed class OwnerResponse
+    internal sealed class OwnerResponse
     {
         [JsonPropertyName("login")]
         public string? Login { get; set; }

@@ -1,11 +1,11 @@
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GameSync.Core.Abstractions.GitHub;
 using GameSync.Core.Errors;
 using GameSync.Core.Models;
 using GameSync.Core.Options;
+using GameSync.Infrastructure.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -50,7 +50,10 @@ public sealed class HttpGitHubOAuthClient : IGitHubOAuthClient
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var payload = await JsonSerializer.DeserializeAsync<DeviceCodeResponse>(stream, SerializerOptions, cancellationToken)
+        var payload = await JsonSerializer.DeserializeAsync(
+                stream,
+                GameSyncJsonContext.Default.DeviceCodeResponse,
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (!response.IsSuccessStatusCode || payload is null || string.IsNullOrWhiteSpace(payload.DeviceCode))
@@ -96,7 +99,10 @@ public sealed class HttpGitHubOAuthClient : IGitHubOAuthClient
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        var payload = await JsonSerializer.DeserializeAsync<AccessTokenResponse>(stream, SerializerOptions, cancellationToken)
+        var payload = await JsonSerializer.DeserializeAsync(
+                stream,
+                GameSyncJsonContext.Default.AccessTokenResponse,
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (payload is null)
@@ -141,12 +147,7 @@ public sealed class HttpGitHubOAuthClient : IGitHubOAuthClient
         }
     }
 
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNameCaseInsensitive = true
-    };
-
-    private sealed class DeviceCodeResponse
+    internal sealed class DeviceCodeResponse
     {
         [JsonPropertyName("device_code")]
         public string? DeviceCode { get; set; }
@@ -167,7 +168,7 @@ public sealed class HttpGitHubOAuthClient : IGitHubOAuthClient
         public int Interval { get; set; }
     }
 
-    private sealed class AccessTokenResponse
+    internal sealed class AccessTokenResponse
     {
         [JsonPropertyName("access_token")]
         public string? AccessToken { get; set; }

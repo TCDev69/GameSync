@@ -19,4 +19,12 @@ public interface ISyncWorkflow
     /// once per game.
     /// </summary>
     Task<IReadOnlyDictionary<string, SyncStatus>> GetGameStatusesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Resolves a local-vs-remote save divergence for one game by applying the selected side immediately.
+    /// </summary>
+    Task<SyncResult> ResolveSaveDivergenceAsync(
+        string gameId,
+        ConflictResolution resolution,
+        CancellationToken cancellationToken = default);
 }

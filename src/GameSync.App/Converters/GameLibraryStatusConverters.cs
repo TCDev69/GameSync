@@ -6,7 +6,7 @@ using Windows.UI;
 
 namespace GameSync.App.Converters;
 
-public sealed class GameLibraryStatusToTextConverter : IValueConverter
+public sealed partial class GameLibraryStatusToTextConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language) =>
         value is GameLibraryStatus status
@@ -17,7 +17,7 @@ public sealed class GameLibraryStatusToTextConverter : IValueConverter
         throw new NotSupportedException();
 }
 
-public sealed class GameLibraryStatusToBrushConverter : IValueConverter
+public sealed partial class GameLibraryStatusToBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {

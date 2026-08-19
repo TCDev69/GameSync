@@ -1,10 +1,10 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using GameSync.Core.Abstractions.Configuration;
 using GameSync.Core.Abstractions.Storage;
 using GameSync.Core.Errors;
 using GameSync.Core.Models;
+using GameSync.Infrastructure.Serialization;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace GameSync.Infrastructure.Configuration;
 
@@ -13,8 +13,6 @@ public sealed class JsonMachineConfigurationStore : IMachineConfigurationStore
     private readonly ILocalAppDataPaths _paths;
     private readonly IConfigurationValidator _validator;
     private readonly ILogger<JsonMachineConfigurationStore> _logger;
-
-    internal static readonly JsonSerializerOptions SerializerOptions = CreateOptions();
 
     public JsonMachineConfigurationStore(
         ILocalAppDataPaths paths,
@@ -41,7 +39,10 @@ public sealed class JsonMachineConfigurationStore : IMachineConfigurationStore
         }
 
         await using var stream = File.OpenRead(_paths.MachineConfigurationFile);
-        var configuration = await JsonSerializer.DeserializeAsync<MachineConfiguration>(stream, SerializerOptions, cancellationToken)
+        var configuration = await JsonSerializer.DeserializeAsync(
+                stream,
+                GameSyncJsonContext.Default.MachineConfiguration,
+                cancellationToken)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException("machine.json deserialized to null.");
 
@@ -72,23 +73,11 @@ public sealed class JsonMachineConfigurationStore : IMachineConfigurationStore
         }
 
         await using var stream = File.Create(_paths.MachineConfigurationFile);
-        await JsonSerializer.SerializeAsync(stream, configuration, SerializerOptions, cancellationToken).ConfigureAwait(false);
+        await JsonSerializer.SerializeAsync(
+            stream,
+            configuration,
+            GameSyncJsonContext.Default.MachineConfiguration,
+            cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Saved machine configuration for {MachineId}", configuration.MachineId);
-    }
-
-    private static JsonSerializerOptions CreateOptions()
-    {
-        var options = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DictionaryKeyPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true,
-            PropertyNameCaseInsensitive = true
-        };
-        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-        return options;
     }
 }

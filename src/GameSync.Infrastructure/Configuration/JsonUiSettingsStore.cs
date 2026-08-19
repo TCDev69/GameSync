@@ -1,9 +1,9 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using GameSync.Core.Abstractions.Configuration;
 using GameSync.Core.Abstractions.Storage;
 using GameSync.Core.Models;
+using GameSync.Infrastructure.Serialization;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace GameSync.Infrastructure.Configuration;
 
@@ -12,14 +12,6 @@ public sealed class JsonUiSettingsStore : IUiSettingsStore
     private readonly ILocalAppDataPaths _paths;
     private readonly ILogger<JsonUiSettingsStore> _logger;
     private readonly string _filePath;
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        PropertyNameCaseInsensitive = true,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-    };
 
     public JsonUiSettingsStore(ILocalAppDataPaths paths, ILogger<JsonUiSettingsStore> logger)
     {
@@ -37,7 +29,10 @@ public sealed class JsonUiSettingsStore : IUiSettingsStore
         }
 
         await using var stream = File.OpenRead(_filePath);
-        return await JsonSerializer.DeserializeAsync<UiSettings>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false)
+        return await JsonSerializer.DeserializeAsync(
+                   stream,
+                   GameSyncJsonContext.Default.UiSettings,
+                   cancellationToken).ConfigureAwait(false)
                ?? new UiSettings();
     }
 
@@ -46,7 +41,11 @@ public sealed class JsonUiSettingsStore : IUiSettingsStore
         ArgumentNullException.ThrowIfNull(settings);
         _paths.EnsureCreated();
         await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, settings, SerializerOptions, cancellationToken).ConfigureAwait(false);
+        await JsonSerializer.SerializeAsync(
+            stream,
+            settings,
+            GameSyncJsonContext.Default.UiSettings,
+            cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Saved UI settings theme={Theme} onboarding={Onboarding}", settings.Theme, settings.OnboardingCompleted);
     }
 }

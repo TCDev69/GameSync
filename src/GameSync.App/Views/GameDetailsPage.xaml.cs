@@ -1,9 +1,6 @@
-using GameSync.App.Dialogs;
 using GameSync.App.Navigation;
 using GameSync.App.Services;
 using GameSync.App.ViewModels;
-using GameSync.Core.Abstractions.Configuration;
-using GameSync.Core.Abstractions.Sync;
 using GameSync.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Input;
@@ -42,48 +39,12 @@ public sealed partial class GameDetailsPage : Page
 
     private async void OnConflictDetected(object? sender, SyncResult result)
     {
-        var conflict = result.Conflicts[0];
-        var dialog = new ConflictDialog();
-        dialog.XamlRoot = XamlRoot;
-        dialog.Load(conflict, ViewModel.Title);
-        await dialog.ShowAsync();
-
-        if (dialog.Choice is ConflictResolutionChoice.ViewHistory)
-        {
-            App.Services.GetRequiredService<INavigationService>().NavigateTo(typeof(HistoryPage));
-            return;
-        }
-
-        if (dialog.Choice is ConflictResolutionChoice.Cancel)
-        {
-            return;
-        }
-
-        try
-        {
-            var machine = await App.Services.GetRequiredService<IMachineConfigurationStore>().LoadAsync();
-            var repoPath = machine.Repository?.LocalPath;
-            if (string.IsNullOrWhiteSpace(repoPath))
-            {
-                return;
-            }
-
-            var resolver = App.Services.GetRequiredService<IConflictResolver>();
-            var resolution = resolver.ToResolution(dialog.Choice);
-            await resolver.ApplyAsync(repoPath, conflict, resolution);
-            await ViewModel.SyncCommand.ExecuteAsync(null);
-        }
-        catch (Exception ex)
-        {
-            var error = new ContentDialog
-            {
-                Title = "Could not apply resolution",
-                Content = ex.Message,
-                CloseButtonText = "OK",
-                XamlRoot = XamlRoot
-            };
-            await error.ShowAsync();
-        }
+        var ui = App.Services.GetRequiredService<ConflictResolutionUiService>();
+        await ui.TryResolveAsync(
+            XamlRoot,
+            result,
+            ViewModel.Title,
+            retryAsync: () => ViewModel.SyncCommand.ExecuteAsync(null));
     }
 
     private void EditableTextBox_KeyDown(object sender, KeyRoutedEventArgs e)

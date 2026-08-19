@@ -43,6 +43,7 @@
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="14,10"
+                x:SuppressXamlTrimWarnings="True"
                 Visibility="{Binding IsActive, Converter={StaticResource BoolToVisibility}}">
                 <Grid ColumnSpacing="12">
                     <Grid.ColumnDefinitions>
@@ -54,7 +55,7 @@
                         FontSize="18"
                         VerticalAlignment="Top"
                         Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                    <StackPanel Grid.Column="1" Spacing="6">
+                    <StackPanel Grid.Column="1" Spacing="6" x:SuppressXamlTrimWarnings="True">
                         <TextBlock
                             x:Name="ActivityTitleText"
                             Style="{StaticResource BodyStrongTextBlockStyle}"

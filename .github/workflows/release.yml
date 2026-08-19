@@ -69,6 +69,7 @@ jobs:
       - name: Publish and build installer
         shell: pwsh
         run: |
+          dotnet test GameSync.sln -c Release -p:Platform=x64
           .\installer\build-release.ps1 -Version "${{ steps.ver.outputs.version }}" -InnoCompiler $env:ISCC
 
       - name: Upload release assets

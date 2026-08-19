@@ -4,7 +4,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 
 namespace GameSync.App.Converters;
 
-public sealed class BoolToVisibilityConverter : IValueConverter
+public sealed partial class BoolToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -21,7 +21,7 @@ public sealed class BoolToVisibilityConverter : IValueConverter
         value is Visibility.Visible;
 }
 
-public sealed class InverseBoolConverter : IValueConverter
+public sealed partial class InverseBoolConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language) =>
         value is not true;
@@ -30,7 +30,7 @@ public sealed class InverseBoolConverter : IValueConverter
         value is not true;
 }
 
-public sealed class NullOrEmptyToVisibilityConverter : IValueConverter
+public sealed partial class NullOrEmptyToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, string language)
     {
@@ -47,7 +47,7 @@ public sealed class NullOrEmptyToVisibilityConverter : IValueConverter
 /// <summary>
 /// Maps a URL string to BitmapImage. Empty/invalid values become null (Image.Source rejects "").
 /// </summary>
-public sealed class StringToImageSourceConverter : IValueConverter
+public sealed partial class StringToImageSourceConverter : IValueConverter
 {
     public object? Convert(object value, Type targetType, object parameter, string language)
     {

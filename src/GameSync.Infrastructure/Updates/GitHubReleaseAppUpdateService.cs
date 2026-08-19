@@ -3,10 +3,11 @@ using GameSync.Core.Abstractions.Updates;
 using GameSync.Core.Models;
 using GameSync.Core.Options;
 using GameSync.Core.Versioning;
+using GameSync.Infrastructure.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace GameSync.Infrastructure.Updates;
@@ -75,7 +76,11 @@ public sealed class GitHubReleaseAppUpdateService : IAppUpdateService
             }
 
             response.EnsureSuccessStatusCode();
-            var release = await response.Content.ReadFromJsonAsync<GitHubReleaseDto>(cancellationToken: cancellationToken)
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var release = await JsonSerializer.DeserializeAsync(
+                    stream,
+                    GameSyncJsonContext.Default.GitHubReleaseDto,
+                    cancellationToken)
                 .ConfigureAwait(false);
             if (release is null || string.IsNullOrWhiteSpace(release.TagName))
             {
@@ -394,7 +399,7 @@ public sealed class GitHubReleaseAppUpdateService : IAppUpdateService
             && a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
     }
 
-    private sealed class GitHubReleaseDto
+    internal sealed class GitHubReleaseDto
     {
         [JsonPropertyName("tag_name")]
         public string? TagName { get; set; }
@@ -406,7 +411,7 @@ public sealed class GitHubReleaseAppUpdateService : IAppUpdateService
         public List<GitHubAssetDto>? Assets { get; set; }
     }
 
-    private sealed class GitHubAssetDto
+    internal sealed class GitHubAssetDto
     {
         [JsonPropertyName("name")]
         public string? Name { get; set; }

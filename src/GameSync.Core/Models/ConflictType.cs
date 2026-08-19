@@ -9,5 +9,6 @@ public enum ConflictType
     ModifyDelete = 1,
     AddAdd = 2,
     Rename = 3,
-    Unknown = 4
+    Unknown = 4,
+    SaveDivergence = 5
 }

@@ -41,7 +41,7 @@ $ArtifactsDir = Join-Path $Root "artifacts"
 $Iss = Join-Path $Root "installer\GameSync.iss"
 
 if (-not $SkipPublish) {
-    Write-Host "Publishing GameSync $Version (unpackaged win-x64)..."
+    Write-Host "Publishing GameSync $Version (Native AOT, unpackaged win-x64)..."
     if (Test-Path $PublishDir) {
         Remove-Item -Recurse -Force $PublishDir
     }
@@ -55,7 +55,8 @@ if (-not $SkipPublish) {
         -p:WindowsAppSDKSelfContained=true `
         -p:SelfContained=true `
         -p:PublishSingleFile=false `
-        -p:PublishTrimmed=false `
+        -p:PublishAot=true `
+        -p:PublishTrimmed=true `
         -p:Version=$Version `
         -o $PublishDir
 

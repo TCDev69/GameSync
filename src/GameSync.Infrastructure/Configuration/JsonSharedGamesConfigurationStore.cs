@@ -1,9 +1,9 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using GameSync.Core.Abstractions.Configuration;
 using GameSync.Core.Errors;
 using GameSync.Core.Models;
+using GameSync.Infrastructure.Serialization;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace GameSync.Infrastructure.Configuration;
 
@@ -13,8 +13,6 @@ public sealed class JsonSharedGamesConfigurationStore : ISharedGamesConfiguratio
 
     private readonly IConfigurationValidator _validator;
     private readonly ILogger<JsonSharedGamesConfigurationStore> _logger;
-
-    internal static readonly JsonSerializerOptions SerializerOptions = CreateOptions();
 
     public JsonSharedGamesConfigurationStore(
         IConfigurationValidator validator,
@@ -37,7 +35,10 @@ public sealed class JsonSharedGamesConfigurationStore : ISharedGamesConfiguratio
         }
 
         await using var stream = File.OpenRead(path);
-        var configuration = await JsonSerializer.DeserializeAsync<GamesConfiguration>(stream, SerializerOptions, cancellationToken)
+        var configuration = await JsonSerializer.DeserializeAsync(
+                stream,
+                GameSyncJsonContext.Default.GamesConfiguration,
+                cancellationToken)
             .ConfigureAwait(false)
             ?? throw new InvalidOperationException("games.json deserialized to null.");
 
@@ -69,25 +70,14 @@ public sealed class JsonSharedGamesConfigurationStore : ISharedGamesConfiguratio
         }
 
         await using var stream = File.Create(path);
-        await JsonSerializer.SerializeAsync(stream, configuration, SerializerOptions, cancellationToken).ConfigureAwait(false);
+        await JsonSerializer.SerializeAsync(
+            stream,
+            configuration,
+            GameSyncJsonContext.Default.GamesConfiguration,
+            cancellationToken).ConfigureAwait(false);
         _logger.LogInformation("Saved shared games configuration with {GameCount} game(s)", configuration.Games.Count);
     }
 
     private static string GetAbsolutePath(string repositoryLocalPath) =>
         Path.Combine(repositoryLocalPath, RelativeConfigurationPath.Replace('/', Path.DirectorySeparatorChar));
-
-    private static JsonSerializerOptions CreateOptions()
-    {
-        var options = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true,
-            PropertyNameCaseInsensitive = true
-        };
-        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-        return options;
-    }
 }

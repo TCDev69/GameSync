@@ -1,8 +1,9 @@
 using GameSync.App.Services;
 using GameSync.App.ViewModels;
+using GameSync.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
-
+using Microsoft.UI.Xaml.Controls;
 namespace GameSync.App;
 
 public sealed partial class LauncherWindow : Window
@@ -24,10 +25,12 @@ public sealed partial class LauncherWindow : Window
         AppWindow.SetIcon("Assets/AppIcon.ico");
         AppWindow.Resize(new Windows.Graphics.SizeInt32(480, 360));
         ViewModel.CloseRequested += OnCloseRequested;
+        ViewModel.ConflictDetected += OnConflictDetected;
         Closed += (_, _) =>
         {
             _taskbarProgress.Unregister(this);
             ViewModel.CloseRequested -= OnCloseRequested;
+            ViewModel.ConflictDetected -= OnConflictDetected;
             ViewModel.Cancel();
         };
         Activated += LauncherWindow_Activated;
@@ -43,6 +46,19 @@ public sealed partial class LauncherWindow : Window
     }
 
     private void OnCloseRequested(object? sender, EventArgs e) => Close();
+
+    private async void OnConflictDetected(object? sender, SyncResult result)
+    {
+        var ui = App.Services.GetRequiredService<ConflictResolutionUiService>();
+        await ui.TryResolveAsync(
+            Content.XamlRoot,
+            result,
+            ViewModel.GameTitle,
+            retryAsync: ViewModel.StartCommand.CanExecute(null)
+                ? () => ViewModel.StartCommand.ExecuteAsync(null)
+                : null,
+            navigateToHistoryFromLauncher: true);
+    }
 
     private void Close_Click(object sender, RoutedEventArgs e)
     {

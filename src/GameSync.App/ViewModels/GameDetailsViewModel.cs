@@ -398,6 +398,16 @@ public sealed partial class GameDetailsViewModel : ObservableObject
 
     public event EventHandler<SyncResult>? ConflictDetected;
 
+    public Task<SyncResult> ResolveSaveDivergenceAsync(ConflictResolution resolution)
+    {
+        if (string.IsNullOrWhiteSpace(_gameId))
+        {
+            return Task.FromResult(SyncResult.Failure(SyncStatus.Failed, "Game id missing."));
+        }
+
+        return _syncWorkflow.ResolveSaveDivergenceAsync(_gameId, resolution);
+    }
+
     [RelayCommand]
     private async Task ToggleDesktopShortcutAsync()
     {

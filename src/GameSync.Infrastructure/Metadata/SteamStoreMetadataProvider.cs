@@ -1,7 +1,8 @@
-using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using GameSync.Core.Abstractions.Metadata;
 using GameSync.Core.Models;
+using GameSync.Infrastructure.Serialization;
 using Microsoft.Extensions.Logging;
 
 namespace GameSync.Infrastructure.Metadata;
@@ -33,13 +34,20 @@ public sealed class SteamStoreMetadataProvider : IGameMetadataProvider
         var url = $"api/storesearch/?term={Uri.EscapeDataString(query.Trim())}&l=english&cc=US";
         try
         {
-            var response = await client.GetFromJsonAsync<SteamSearchResponse>(url, cancellationToken).ConfigureAwait(false);
-            if (response?.Items is null)
+            var response = await client.GetAsync(url, cancellationToken).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            var payload = await JsonSerializer.DeserializeAsync(
+                    stream,
+                    GameSyncJsonContext.Default.SteamSearchResponse,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            if (payload?.Items is null)
             {
                 return Array.Empty<GameSearchResult>();
             }
 
-            return response.Items
+            return payload.Items
                 .Where(i => i.Id > 0 && !string.IsNullOrWhiteSpace(i.Name))
                 .Take(20)
                 .Select(i => new GameSearchResult
@@ -91,13 +99,13 @@ public sealed class SteamStoreMetadataProvider : IGameMetadataProvider
         };
     }
 
-    private sealed class SteamSearchResponse
+    internal sealed class SteamSearchResponse
     {
         [JsonPropertyName("items")]
         public List<SteamSearchItem>? Items { get; set; }
     }
 
-    private sealed class SteamSearchItem
+    internal sealed class SteamSearchItem
     {
         [JsonPropertyName("id")]
         public long Id { get; set; }

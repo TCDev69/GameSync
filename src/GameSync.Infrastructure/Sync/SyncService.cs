@@ -51,6 +51,12 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
     public Task<SyncResult> SyncAfterGameExitAsync(string gameId, CancellationToken cancellationToken = default) =>
         WithGateAsync(() => SyncAfterGameExitCoreAsync(gameId, cancellationToken), cancellationToken);
 
+    public Task<SyncResult> ResolveSaveDivergenceAsync(
+        string gameId,
+        ConflictResolution resolution,
+        CancellationToken cancellationToken = default) =>
+        WithGateAsync(() => ResolveSaveDivergenceCoreAsync(gameId, resolution, cancellationToken), cancellationToken);
+
     private async Task<SyncResult> SyncBeforeGameLaunchCoreAsync(string gameId, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gameId);
@@ -125,18 +131,16 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
             // - both have content and differ → refuse
             var divergent = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
             var remoteHasSaves = _saveService.HasRepositorySaveContent(game, repoPath);
-            var localHasSaves = _saveService.HasLocalSaveContent(game);
 
-            if (divergent.HasChanges && remoteHasSaves && localHasSaves)
+            var divergenceResult = TryBuildSaveDivergenceResult(
+                gameId,
+                game,
+                repoPath,
+                divergent,
+                "Local and remote saves differ. Choose whether to keep local saves or replace them with remote saves.");
+            if (divergenceResult is not null)
             {
-                _logger.LogWarning(
-                    "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
-                    gameId,
-                    divergent.TotalChanges);
-                return SyncResult.Failure(
-                    SyncStatus.Conflicted,
-                    "Local saves differ from the repository. Back up or resolve the difference in History / Game details before launching so GameSync does not overwrite your files.",
-                    gameId);
+                return divergenceResult;
             }
 
             if (!remoteHasSaves)
@@ -223,6 +227,18 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                 }
             }
 
+            var postPullDivergence = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+            var divergenceResult = TryBuildSaveDivergenceResult(
+                gameId,
+                game,
+                repoPath,
+                postPullDivergence,
+                "Local and remote saves differ after gameplay. Choose whether to keep local saves or replace them with remote saves.");
+            if (divergenceResult is not null)
+            {
+                return divergenceResult;
+            }
+
             await _saveService.CopyLocalToRepositoryAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
 
             var stagedPaths = game.SaveLocations
@@ -284,6 +300,66 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         }
 
         return await SyncAfterGameExitAsync(gameId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<SyncResult> ResolveSaveDivergenceCoreAsync(
+        string gameId,
+        ConflictResolution resolution,
+        CancellationToken cancellationToken)
+    {
+        if (resolution == ConflictResolution.Abort)
+        {
+            return SyncResult.Failure(SyncStatus.Conflicted, "Resolution cancelled.", gameId);
+        }
+
+        try
+        {
+            var (machine, _, game, repoPath) = await LoadContextAsync(gameId, cancellationToken).ConfigureAwait(false);
+            await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            await _gitService.PullAsync(repoPath, cancellationToken).ConfigureAwait(false);
+
+            if (resolution == ConflictResolution.Remote)
+            {
+                await _saveService.RestoreRepositoryToLocalAsync(game, repoPath, createBackup: true, cancellationToken)
+                    .ConfigureAwait(false);
+                return SyncResult.Success(
+                    SyncStatus.UpToDate,
+                    "Remote saves restored locally.",
+                    gameId);
+            }
+
+            await _saveService.CopyLocalToRepositoryAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+            var stagedPaths = game.SaveLocations
+                .Select(l => l.RemotePath.Replace('\\', '/'))
+                .ToArray();
+            await _gitService.AddAsync(repoPath, stagedPaths, cancellationToken).ConfigureAwait(false);
+            await _gitService.CommitAsync(repoPath, SyncCommitMessage.ForGameUpdate(game.Title, machine.MachineId), cancellationToken)
+                .ConfigureAwait(false);
+            await _gitService.PushAsync(repoPath, cancellationToken).ConfigureAwait(false);
+
+            return SyncResult.Success(
+                SyncStatus.UpToDate,
+                "Local saves published to remote repository.",
+                gameId);
+        }
+        catch (GitConflictDetectedException ex)
+        {
+            return SyncResult.Failure(
+                SyncStatus.Conflicted,
+                "Git conflicts detected while resolving local/remote divergence.",
+                gameId,
+                ex,
+                ex.Conflicts);
+        }
+        catch (GameSyncException ex)
+        {
+            return SyncResult.Failure(SyncStatus.Failed, ex.Message, gameId, ex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected divergence resolution failure for {GameId}", gameId);
+            return SyncResult.Failure(SyncStatus.Failed, "Unexpected divergence resolution failure.", gameId, ex);
+        }
     }
 
     public async Task<SyncStatus> GetStatusAsync(string? gameId = null, CancellationToken cancellationToken = default)
@@ -394,6 +470,93 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
             ?? throw new ConfigurationValidationException([$"Game '{gameId}' was not found in games.json."]);
 
         return (machine, games, game, repoPath);
+    }
+
+    private SyncResult? TryBuildSaveDivergenceResult(
+        string gameId,
+        Game game,
+        string repoPath,
+        SaveChangesDetected divergent,
+        string message)
+    {
+        if (!divergent.HasChanges)
+        {
+            return null;
+        }
+
+        var remoteHasSaves = _saveService.HasRepositorySaveContent(game, repoPath);
+        var localHasSaves = _saveService.HasLocalSaveContent(game);
+        if (!remoteHasSaves || !localHasSaves)
+        {
+            return null;
+        }
+
+        _logger.LogWarning(
+            "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
+            gameId,
+            divergent.TotalChanges);
+
+        return SyncResult.Failure(
+            SyncStatus.Conflicted,
+            message,
+            gameId,
+            conflicts: BuildSaveDivergenceConflicts(game, divergent));
+    }
+
+    private IReadOnlyList<Conflict> BuildSaveDivergenceConflicts(Game game, SaveChangesDetected changes)
+    {
+        var allPaths = changes.AddedFiles.Concat(changes.ChangedFiles).Concat(changes.DeletedFiles).Distinct(StringComparer.OrdinalIgnoreCase);
+        var conflicts = new List<Conflict>();
+        foreach (var relative in allPaths)
+        {
+            var split = relative.IndexOf('/');
+            var locationId = split > 0 ? relative[..split] : relative;
+            var locationRelative = split > 0 && split + 1 < relative.Length ? relative[(split + 1)..] : string.Empty;
+            var location = game.SaveLocations.FirstOrDefault(s => s.Id.Equals(locationId, StringComparison.OrdinalIgnoreCase));
+            if (location is null)
+            {
+                continue;
+            }
+
+            var remotePath = string.IsNullOrWhiteSpace(locationRelative)
+                ? location.RemotePath.Replace('\\', '/')
+                : $"{location.RemotePath.TrimEnd('/', '\\')}/{locationRelative}".Replace('\\', '/');
+            var localRoot = _pathResolver.Resolve(location.LocalPath);
+            var localPath = string.IsNullOrWhiteSpace(locationRelative)
+                ? localRoot
+                : Path.Combine(localRoot, locationRelative.Replace('/', Path.DirectorySeparatorChar));
+
+            conflicts.Add(new Conflict
+            {
+                Path = remotePath,
+                Type = ConflictType.SaveDivergence,
+                GameId = game.Id,
+                SaveLocationId = location.Id,
+                LocalPath = localPath,
+                RemotePath = remotePath,
+                Message = "Local and remote saves differ."
+            });
+        }
+
+        if (conflicts.Count > 0)
+        {
+            return conflicts;
+        }
+
+        var fallback = game.SaveLocations.FirstOrDefault();
+        return
+        [
+            new Conflict
+            {
+                Path = fallback?.RemotePath.Replace('\\', '/') ?? game.Id,
+                Type = ConflictType.SaveDivergence,
+                GameId = game.Id,
+                SaveLocationId = fallback?.Id,
+                LocalPath = fallback is null ? null : _pathResolver.Resolve(fallback.LocalPath),
+                RemotePath = fallback?.RemotePath,
+                Message = "Local and remote saves differ."
+            }
+        ];
     }
 
     private async Task<string> ResolveRepositoryPathAsync(MachineConfiguration machine, CancellationToken cancellationToken)

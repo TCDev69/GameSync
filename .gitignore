@@ -44,6 +44,9 @@ coverage*
 *.coverage
 *.coveragexml
 
+## Local debug logs
+debug*.log
+
 ## Rider
 .idea/
 *.sln.iml

@@ -1,11 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using GameSync.Core.Models;
+using WinRT;
 
 namespace GameSync.App.Services;
 
 /// <summary>
 /// Global long-running operation state shown in the main window banner and Windows taskbar progress.
 /// </summary>
+[GeneratedBindableCustomProperty]
 public sealed partial class AppActivityService : ObservableObject
 {
     private AppActivityKind _currentKind = AppActivityKind.Library;

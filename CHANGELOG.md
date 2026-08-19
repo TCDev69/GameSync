@@ -2,6 +2,27 @@
 
 All notable changes to GameSync are documented here. Version numbers follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-08-19
+
+### Added
+
+- Save divergence dialog when local and remote saves differ: choose **Keep local saves** or **Use remote saves** before launch, manual sync, or after exit
+- Immediate application of the chosen side (publish local to GitHub or restore remote locally) via `ResolveSaveDivergenceAsync`
+- Shared conflict-resolution UI service used by game details and the launcher window
+- Native AOT publish for Release builds (faster startup, no JIT at runtime)
+- Source-generated JSON serialization (`GameSyncJsonContext`) for AOT-safe config and API payloads
+
+### Changed
+
+- Release installer is built with Native AOT (`PublishAot=true`, `PublishTrimmed=true`)
+- Conflict dialog copy explains consequences for each choice (local vs GitHub)
+- Post-exit sync checks for save divergence after integrating remote commits, not only Git index conflicts
+
+### Fixed
+
+- Launch and sync no longer silently overwrite divergent local saves with remote copies
+- Launcher window surfaces the same divergence prompt as game details when pre-launch or post-exit sync conflicts
+
 ## [1.0.3] - 2026-08-12
 
 ### Added
@@ -86,6 +107,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 - Local save path policy blocks sensitive system folders
 - HTTPS-only update downloads from GitHub hosts
 
+[1.1.0]: https://github.com/TCDev69/GameSync/releases/tag/v1.1.0
 [1.0.3]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.3
 [1.0.2]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.2
 [1.0.1]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.1

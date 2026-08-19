@@ -91,6 +91,13 @@ public sealed partial class LauncherViewModel : ObservableObject
             }
             else if (!result.WasCancelled)
             {
+                var syncConflict = result.PreLaunchSync ?? result.PostExitSync;
+                if (syncConflict is not null && syncConflict.Conflicts.Count > 0)
+                {
+                    ConflictDetected?.Invoke(this, syncConflict);
+                    return;
+                }
+
                 IsError = true;
                 StatusMessage = result.Message ?? "Launch failed.";
                 Phase = LaunchPhase.Error;
@@ -116,6 +123,7 @@ public sealed partial class LauncherViewModel : ObservableObject
     }
 
     public event EventHandler? CloseRequested;
+    public event EventHandler<SyncResult>? ConflictDetected;
 
     public void Cancel()
     {

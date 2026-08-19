@@ -90,11 +90,32 @@
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
 
-  <!-- Publish Properties -->
+  <!--
+    Native AOT (no JIT) for Release publish. Debug stays CoreCLR for fast F5.
+    WASDK recommends enabling PublishAot at restore time so package assets resolve.
+  -->
   <PropertyGroup>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-    <!-- Trimming breaks System.Text.Json + COM shortcut creation; keep self-contained publish untrimmed. -->
-    <PublishTrimmed>false</PublishTrimmed>
+    <PublishAot Condition="'$(ExcludeRestorePackageImports)' == 'true'">true</PublishAot>
+    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">false</PublishReadyToRun>
+    <!-- ReadyToRun is unused / conflicting when PublishAot is on. -->
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">false</PublishReadyToRun>
+    <PublishTrimmed Condition="'$(PublishAot)' == 'true'">true</PublishTrimmed>
+    <PublishTrimmed Condition="'$(PublishAot)' != 'true'">false</PublishTrimmed>
+    <!-- Keep COM marshalling for WScript.Shell shortcuts + ITaskbarList3. -->
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <CsWinRTAotOptimizerEnabled>true</CsWinRTAotOptimizerEnabled>
   </PropertyGroup>
+
+  <!-- Unpackaged Native AOT publish may omit .xbf / .pri (WindowsAppSDK#6394). -->
+  <Target Name="CopyXamlResourcesForAot" AfterTargets="Publish" Condition="'$(PublishAot)' == 'true'">
+    <ItemGroup>
+      <_XamlResources Include="$(OutputPath)**\*.xbf" />
+      <_XamlResources Include="$(OutputPath)$(AssemblyName).pri" Condition="Exists('$(OutputPath)$(AssemblyName).pri')" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(_XamlResources)"
+      DestinationFiles="@(_XamlResources->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
+      SkipUnchangedFiles="true" />
+  </Target>
 </Project>
