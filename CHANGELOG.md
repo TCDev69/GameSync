@@ -2,6 +2,12 @@
 
 All notable changes to GameSync are documented here. Version numbers follow [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] - 2026-08-20
+
+### Fixed
+
+- Reverted Native AOT publish — release builds use ReadyToRun again so the installed app starts reliably
+
 ## [1.1.1] - 2026-08-20
 
 ### Fixed
@@ -62,7 +68,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 
 ### Added
 
-- Working self-update: the release installer is downloaded, verified and installed unattended, and GameSync restarts itself ΓÇö no manual download step
+- Working self-update: the release installer is downloaded, verified and installed unattended, and GameSync restarts itself — no manual download step
 - Background update check a few seconds after startup, surfaced as a dismissable banner with an **Install update** action
 - Download progress for the update in Settings
 - `--check-update` and `--update` CLI commands (`--check-update` exits with `10` when a newer release exists)
@@ -105,7 +111,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 
 - Native Windows desktop app (WinUI 3) for synchronizing game save files
 - GitHub OAuth device flow sign-in (no client secret; token in Windows Credential Manager)
-- Private GitHub repository as the sync backend (LibGit2Sharp ΓÇö no separate Git install)
+- Private GitHub repository as the sync backend (LibGit2Sharp — no separate Git install)
 - Game library: add games, configure save paths and executables per PC
 - Sync before launch and after exit; conflict resolution dialog for Git index conflicts
 - Sync history with restore and local backups
@@ -119,6 +125,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 - Local save path policy blocks sensitive system folders
 - HTTPS-only update downloads from GitHub hosts
 
+[1.1.2]: https://github.com/TCDev69/GameSync/releases/tag/v1.1.2
 [1.1.1]: https://github.com/TCDev69/GameSync/releases/tag/v1.1.1
 [1.1.0]: https://github.com/TCDev69/GameSync/releases/tag/v1.1.0
 [1.0.3]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.3

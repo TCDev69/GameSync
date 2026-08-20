@@ -101,8 +101,6 @@ dotnet test GameSync.sln -c Release -p:Platform=x64
 .\installer\build-release.ps1 -Version 1.0.3
 ```
 
-Release builds use **Native AOT** (`PublishAot=true`): no JIT at runtime, faster startup, smaller working set. Debug/`dotnet run` stays on CoreCLR for a fast inner loop.
-
 Output: `artifacts\GameSync-Setup-x64.exe`
 
 More detail: [installer/README.md](../installer/README.md).

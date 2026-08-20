@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5" xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities" xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10" IgnorableNamespaces="uap uap5 rescap desktop mp">
-  <Identity Name="GameSync.App" Publisher="CN=GameSync" Version="1.1.1.0" />
+  <Identity Name="GameSync.App" Publisher="CN=GameSync" Version="1.1.2.0" />
   <mp:PhoneIdentity PhoneProductId="51EAD7BC-A3B5-4668-AD70-C120E064BBC1" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
     <DisplayName>GameSync</DisplayName>

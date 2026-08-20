@@ -90,22 +90,11 @@
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
 
-  <!-- Publish defaults: Native AOT is enabled only via PublishProfiles (Release installer). -->
+  <!-- Publish Properties -->
   <PropertyGroup>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">false</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">true</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
+    <!-- Trimming breaks System.Text.Json + COM shortcut creation; keep self-contained publish untrimmed. -->
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
-
-  <!-- Unpackaged Native AOT publish may omit .xbf / .pri (WindowsAppSDK#6394). -->
-  <Target Name="CopyXamlResourcesForAot" AfterTargets="Publish" Condition="'$(PublishAot)' == 'true'">
-    <ItemGroup>
-      <_XamlResources Include="$(OutputPath)**\*.xbf" />
-      <_XamlResources Include="$(OutputPath)$(AssemblyName).pri" Condition="Exists('$(OutputPath)$(AssemblyName).pri')" />
-    </ItemGroup>
-    <Copy
-      SourceFiles="@(_XamlResources)"
-      DestinationFiles="@(_XamlResources->'$(PublishDir)%(RecursiveDir)%(Filename)%(Extension)')"
-      SkipUnchangedFiles="true" />
-  </Target>
 </Project>
