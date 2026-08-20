@@ -62,7 +62,17 @@ public sealed partial class LauncherViewModel : ObservableObject
     private void ConfirmSessionEnd() => _sessionAwaiter.CompleteSession();
 
     [RelayCommand]
-    private async Task StartAsync()
+    private Task StartAsync() => RunLaunchAsync();
+
+    /// <summary>Called after the user resolves a save-divergence dialog so launch continues without reopening the app.</summary>
+    public Task RetryLaunchAfterConflictAsync()
+    {
+        IsError = false;
+        IsBusy = false;
+        return RunLaunchAsync();
+    }
+
+    private async Task RunLaunchAsync()
     {
         if (string.IsNullOrWhiteSpace(GameId) || IsBusy)
         {
@@ -94,6 +104,13 @@ public sealed partial class LauncherViewModel : ObservableObject
                 var syncConflict = result.PreLaunchSync ?? result.PostExitSync;
                 if (syncConflict is not null && syncConflict.Conflicts.Count > 0)
                 {
+                    if (syncConflict.Conflicts[0].Type == ConflictType.SaveDivergence)
+                    {
+                        IsError = false;
+                        StatusMessage = "Local and remote saves differ. Choose which version to keep.";
+                        ApplyProgress(LaunchPhase.DownloadingSaves, StatusMessage);
+                    }
+
                     ConflictDetected?.Invoke(this, syncConflict);
                     return;
                 }
@@ -117,7 +134,7 @@ public sealed partial class LauncherViewModel : ObservableObject
             IsBusy = false;
             _activityHandle?.Dispose();
             _activityHandle = null;
-            _cts.Dispose();
+            _cts?.Dispose();
             _cts = null;
         }
     }

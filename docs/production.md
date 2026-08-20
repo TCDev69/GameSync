@@ -78,14 +78,14 @@ The Client ID is public. Never commit a Client Secret (not used for Device Flow)
 Single source of truth: [`Directory.Build.props`](../Directory.Build.props)
 
 ```xml
-<Version>1.1.0</Version>
+<Version>1.0.0</Version>
 ```
 
 | Surface | Value |
 |---------|--------|
-| Assemblies / About | `1.1.0` |
+| Assemblies / About | `1.0.0` |
 | Inno Setup | same, via `build-release.ps1 -Version` |
-| GitHub Release tag | `v1.1.0` |
+| GitHub Release tag | `v1.0.0` |
 
 Bump `Version`, commit, then tag `vMAJOR.MINOR.PATCH`.
 
@@ -98,7 +98,7 @@ Bump `Version`, commit, then tag `vMAJOR.MINOR.PATCH`.
 dotnet test GameSync.sln -c Release -p:Platform=x64
 .\installer\build-release.ps1
 # or pin version:
-.\installer\build-release.ps1 -Version 1.1.0
+.\installer\build-release.ps1 -Version 1.0.3
 ```
 
 Release builds use **Native AOT** (`PublishAot=true`): no JIT at runtime, faster startup, smaller working set. Debug/`dotnet run` stays on CoreCLR for a fast inner loop.
@@ -161,17 +161,15 @@ With `GAMESYNC_UPDATE_OWNER` / `GAMESYNC_UPDATE_REPO` (or baked defaults) set:
 
 ---
 
-## 9. Pre-ship checklist (v1.1.0+)
+## 9. Pre-ship checklist
 
 1. OAuth App created, **Device Flow** enabled (Client ID already defaulted in `GameSyncOptions`).
 2. Callback URL filled with placeholder (`http://127.0.0.1/` is fine).
-3. `Version` in `Directory.Build.props` matches tag `vX.Y.Z`.
-4. `CHANGELOG.md` has a `## [X.Y.Z]` section (CI fails the release workflow if missing).
-5. `dotnet test GameSync.sln -c Release -p:Platform=x64` passes locally.
-6. `.\installer\build-release.ps1` completes; smoke-test `artifacts\publish\GameSync.exe` starts.
-7. Manual QA: launch with divergent saves → dialog → both choices; manual sync; post-exit push; update check.
-8. Uninstall: Program Files gone; `%LOCALAPPDATA%\GameSync\` still there.
-9. Manual QA matrix in [development.md](development.md) as needed.
+3. First Release asset named `GameSync-Setup-x64.exe` on `TCDev69/GameSync`.
+4. `Version` in `Directory.Build.props` matches tag `vX.Y.Z`.
+5. Local test: install Setup → login → sync → shortcuts → About version.
+6. Uninstall: Program Files gone; `%LOCALAPPDATA%\GameSync\` still there.
+7. Manual QA matrix in [development.md](development.md) as needed.
 
 ---
 

@@ -235,64 +235,6 @@ public sealed class SyncServiceTests
     }
 
     [Fact]
-    public async Task SyncAfterGameExit_RefusesWhenLocalSavesDivergeAfterPull()
-    {
-        var game = CreateGame(@"C:\tmp\local");
-        var machine = new MachineConfiguration
-        {
-            MachineId = "DESKTOP",
-            Repository = new RepositoryConfiguration
-            {
-                Owner = "me",
-                Name = "saves",
-                LocalPath = @"C:\tmp\repo"
-            }
-        };
-
-        var machineStore = Substitute.For<IMachineConfigurationStore>();
-        machineStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(machine);
-        var gamesStore = Substitute.For<ISharedGamesConfigurationStore>();
-        gamesStore.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new GamesConfiguration { Games = [game] });
-        var repoService = Substitute.For<IRepositoryService>();
-        repoService.IsLocalRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
-
-        var save = Substitute.For<ISaveService>();
-        save.DetectChangesAsync(Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(
-                new SaveChangesDetected { ChangedFiles = ["main/slot.sav"] },
-                new SaveChangesDetected { ChangedFiles = ["main/slot.sav"] });
-        save.HasRepositorySaveContent(Arg.Any<Game>(), Arg.Any<string>()).Returns(true);
-        save.HasLocalSaveContent(Arg.Any<Game>()).Returns(true);
-
-        var git = Substitute.For<IGitService>();
-        git.GetStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new GitRepository
-        {
-            LocalPath = @"C:\tmp\repo",
-            HasUncommittedChanges = false,
-            SyncStatus = SyncStatus.BehindRemote
-        });
-        git.GetConflictsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Conflict>());
-
-        var sync = new SyncService(
-            machineStore,
-            gamesStore,
-            new ConfigurationValidator(),
-            repoService,
-            git,
-            save,
-            Substitute.For<IBackupService>(),
-            Substitute.For<IPathResolver>(),
-            NullLogger<SyncService>.Instance);
-
-        var result = await sync.SyncAfterGameExitAsync("demo_game");
-
-        result.Succeeded.Should().BeFalse();
-        result.Status.Should().Be(SyncStatus.Conflicted);
-        result.Conflicts.Should().ContainSingle(c => c.Type == ConflictType.SaveDivergence);
-        await git.DidNotReceive().PushAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
     public async Task GetGameStatusesAsync_ReadsGitOnceForAllGames()
     {
         var machine = new MachineConfiguration

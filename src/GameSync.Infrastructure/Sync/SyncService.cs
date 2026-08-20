@@ -131,16 +131,20 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
             // - both have content and differ → refuse
             var divergent = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
             var remoteHasSaves = _saveService.HasRepositorySaveContent(game, repoPath);
+            var localHasSaves = _saveService.HasLocalSaveContent(game);
 
-            var divergenceResult = TryBuildSaveDivergenceResult(
-                gameId,
-                game,
-                repoPath,
-                divergent,
-                "Local and remote saves differ. Choose whether to keep local saves or replace them with remote saves.");
-            if (divergenceResult is not null)
+            if (divergent.HasChanges && remoteHasSaves && localHasSaves)
             {
-                return divergenceResult;
+                _logger.LogWarning(
+                    "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
+                    gameId,
+                    divergent.TotalChanges);
+                var divergenceConflicts = BuildSaveDivergenceConflicts(game, divergent);
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Local and remote saves differ. Choose whether to keep local saves or replace them with remote saves.",
+                    gameId,
+                    conflicts: divergenceConflicts);
             }
 
             if (!remoteHasSaves)
@@ -225,18 +229,6 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                         gameId,
                         conflicts: pullConflicts);
                 }
-            }
-
-            var postPullDivergence = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
-            var divergenceResult = TryBuildSaveDivergenceResult(
-                gameId,
-                game,
-                repoPath,
-                postPullDivergence,
-                "Local and remote saves differ after gameplay. Choose whether to keep local saves or replace them with remote saves.");
-            if (divergenceResult is not null)
-            {
-                return divergenceResult;
             }
 
             await _saveService.CopyLocalToRepositoryAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
@@ -470,37 +462,6 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
             ?? throw new ConfigurationValidationException([$"Game '{gameId}' was not found in games.json."]);
 
         return (machine, games, game, repoPath);
-    }
-
-    private SyncResult? TryBuildSaveDivergenceResult(
-        string gameId,
-        Game game,
-        string repoPath,
-        SaveChangesDetected divergent,
-        string message)
-    {
-        if (!divergent.HasChanges)
-        {
-            return null;
-        }
-
-        var remoteHasSaves = _saveService.HasRepositorySaveContent(game, repoPath);
-        var localHasSaves = _saveService.HasLocalSaveContent(game);
-        if (!remoteHasSaves || !localHasSaves)
-        {
-            return null;
-        }
-
-        _logger.LogWarning(
-            "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
-            gameId,
-            divergent.TotalChanges);
-
-        return SyncResult.Failure(
-            SyncStatus.Conflicted,
-            message,
-            gameId,
-            conflicts: BuildSaveDivergenceConflicts(game, divergent));
     }
 
     private IReadOnlyList<Conflict> BuildSaveDivergenceConflicts(Game game, SaveChangesDetected changes)

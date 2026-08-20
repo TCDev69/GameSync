@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Navigation;
 
 namespace GameSync.App;
 
@@ -48,6 +49,7 @@ public sealed partial class MainWindow : Window
 
         _navigationService = App.Services.GetRequiredService<INavigationService>();
         _navigationService.Initialize(ContentFrame);
+        ContentFrame.NavigationFailed += ContentFrame_NavigationFailed;
 
         Activated += async (_, _) =>
         {
@@ -56,7 +58,31 @@ public sealed partial class MainWindow : Window
             await theme.InitializeAsync();
         };
 
-        _ = InitializeShellAsync();
+        _ = InitializeShellSafeAsync();
+    }
+
+    private async Task InitializeShellSafeAsync()
+    {
+        var logger = App.Services.GetRequiredService<ILogger<MainWindow>>();
+        try
+        {
+            await InitializeShellAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Shell initialization failed; opening library as fallback");
+            if (!_onboardingActive)
+            {
+                ShowMainNavigation();
+            }
+        }
+    }
+
+    private void ContentFrame_NavigationFailed(object sender, NavigationFailedEventArgs e)
+    {
+        App.Services.GetRequiredService<ILogger<MainWindow>>()
+            .LogError(e.Exception, "Navigation to {Page} failed", e.SourcePageType.Name);
+        e.Handled = true;
     }
 
     private async Task InitializeShellAsync()

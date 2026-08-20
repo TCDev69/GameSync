@@ -90,21 +90,11 @@
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>
 
-  <!--
-    Native AOT (no JIT) for Release publish. Debug stays CoreCLR for fast F5.
-    WASDK recommends enabling PublishAot at restore time so package assets resolve.
-  -->
+  <!-- Publish defaults: Native AOT is enabled only via PublishProfiles (Release installer). -->
   <PropertyGroup>
-    <PublishAot Condition="'$(ExcludeRestorePackageImports)' == 'true'">true</PublishAot>
-    <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
     <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">false</PublishReadyToRun>
-    <!-- ReadyToRun is unused / conflicting when PublishAot is on. -->
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">false</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(PublishAot)' == 'true'">true</PublishTrimmed>
-    <PublishTrimmed Condition="'$(PublishAot)' != 'true'">false</PublishTrimmed>
-    <!-- Keep COM marshalling for WScript.Shell shortcuts + ITaskbarList3. -->
-    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
-    <CsWinRTAotOptimizerEnabled>true</CsWinRTAotOptimizerEnabled>
+    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">true</PublishReadyToRun>
+    <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>
 
   <!-- Unpackaged Native AOT publish may omit .xbf / .pri (WindowsAppSDK#6394). -->

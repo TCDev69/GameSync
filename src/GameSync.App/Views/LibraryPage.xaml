@@ -76,7 +76,6 @@
 
             <GridView
                 x:Name="GamesGrid"
-                ItemsSource="{x:Bind ViewModel.Games, Mode=OneWay}"
                 IsItemClickEnabled="True"
                 ItemClick="GamesGrid_ItemClick"
                 SelectionMode="None"
@@ -107,7 +106,7 @@
                                     <Image
                                         Source="{x:Bind CoverUrl, Converter={StaticResource StringToImageSource}}"
                                         Stretch="UniformToFill"
-                                        Visibility="{x:Bind HasCover}" />
+                                        Visibility="{x:Bind HasCover, Converter={StaticResource BoolToVisibility}}" />
                                     <FontIcon
                                         Glyph="&#xE7FC;"
                                         FontSize="32"
@@ -121,7 +120,7 @@
                                         Margin="8"
                                         HorizontalAlignment="Right"
                                         VerticalAlignment="Top"
-                                        Visibility="{x:Bind HasWarning}">
+                                        Visibility="{x:Bind HasWarning, Converter={StaticResource BoolToVisibility}}">
                                         <TextBlock Text="!" FontSize="12" Foreground="White" />
                                     </Border>
                                 </Grid>

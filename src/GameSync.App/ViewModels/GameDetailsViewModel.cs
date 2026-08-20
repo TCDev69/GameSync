@@ -408,6 +408,14 @@ public sealed partial class GameDetailsViewModel : ObservableObject
         return _syncWorkflow.ResolveSaveDivergenceAsync(_gameId, resolution);
     }
 
+    public void NotifyDivergenceResolved(SyncResult result)
+    {
+        Show(
+            "Conflict resolved",
+            result.Message ?? "Your choice was applied.",
+            InfoBarSeverity.Success);
+    }
+
     [RelayCommand]
     private async Task ToggleDesktopShortcutAsync()
     {

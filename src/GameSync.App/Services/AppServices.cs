@@ -19,7 +19,6 @@ public static class AppServices
             services.AddSingleton<AppActivationService>();
             services.AddSingleton<AppActivityService>();
             services.AddSingleton<TaskbarProgressService>();
-            services.AddSingleton<ConflictResolutionUiService>();
             services.AddSingleton<UiGameSessionAwaiter>();
             services.AddSingleton<IGameSessionAwaiter>(sp => sp.GetRequiredService<UiGameSessionAwaiter>());
             services.AddTransient<ShellViewModel>();

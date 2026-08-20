@@ -13,6 +13,13 @@ public sealed partial class LibraryPage : Page
     {
         ViewModel = App.Services.GetRequiredService<LibraryViewModel>();
         InitializeComponent();
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+    {
+        Loaded -= OnLoaded;
+        GamesGrid.ItemsSource = ViewModel.Games;
     }
 
     protected override void OnNavigatedTo(NavigationEventArgs e)
